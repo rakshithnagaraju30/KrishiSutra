@@ -1,0 +1,97 @@
+name: Android APK (prototype)
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # needed to publish the APK as a GitHub pre-release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android SDK packages required by React Native
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0" "ndk;27.1.12297006" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        # Prototype only: the template signs release builds with the debug key.
+        # A real upload keystore (kept in GitHub secrets) is needed before any Play Store release.
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
+
+      - name: Name the APK
+        id: apk
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          NAME="KrishiSutra-prototype-v${VERSION}-build${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          ls -la "$NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: apps/mobile/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+
+      - name: Publish as GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prototype-v${{ steps.apk.outputs.version }}-build${{ github.run_number }}
+          name: KrishiSutra prototype v${{ steps.apk.outputs.version }} (build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          files: apps/mobile/${{ steps.apk.outputs.name }}
+          body: |
+            **Prototype build: not for real farming decisions.**
+
+            Clickable prototype of the KrishiSutra farmer app (Android).
+            Crop details are sample placeholders; verified content from agricultural universities, ICAR and KVKs will be added later.
+
+            **Install:** download the `.apk` below on an Android phone, open it, and allow "Install unknown apps" for your browser or file manager when asked.
+
+            Built from commit ${{ github.sha }}.
