@@ -4,7 +4,7 @@
 |---|---|
 | Document | 01 — Product Vision & Requirements |
 | Phase | Phase 1: Shared understanding (no application code) |
-| Status | Draft — launch decisions recorded (§14.1) |
+| Status | Draft — launch decisions recorded (§14.1, §14.3) |
 | Last updated | 2026-11-15 |
 | UI reference | [`docs/assets/ui-reference-grow-crops.png`](../assets/ui-reference-grow-crops.png) |
 
@@ -453,15 +453,33 @@ This is a conceptual model to guide the database design phase — not a schema.
 | D3 | Platform | **Cross-platform app (Android + iOS) and web** | Choose a stack in Phase 2 that shares code across mobile and web. Offline-first behaviour is required on mobile; the web can be online-first. The backend API is shared. |
 | D4 | MVP scope | **Feature A + Feature B + crop tracking (Journey C)** | Requirements F-03, F-04 and F-05 (crop plan, cultivation record, reminders) move from **S** to **M**. The MVP crop list should stay small so content quality is achievable. |
 | D5 | Expert partners | **Not yet** | Content starts from public, citable sources (SAU package-of-practices, ICAR publications). It is published with the status **"Source-cited — pending expert review"**, shown to users as a distinct label (in addition to Verified / Estimate / Not available). Finding a KVK or SAU review partner is an early project task. |
+| D6 | Launch crops | **Paddy, Maize, Tomato, Chilli, Groundnut, Onion** | See §14.3. |
 
-### 14.2 Still open
+### 14.3 Launch crop set (D6)
+
+| Crop | Initial categories (multi-category allowed) | Content notes for Phase 4 |
+|---|---|---|
+| Paddy (Rice) | Food Crops → Cereals | Likely needs more than one procedure (for example transplanted and direct-seeded), each with its own stages. A nursery stage applies only to transplanted paddy. |
+| Maize | Food Crops → Cereals; Fodder Crops | Also grown for fodder. Confirm with sources whether a separate fodder procedure is needed. |
+| Tomato | Vegetable Crops | Nursery + transplanting. Good candidate for a home-garden (container) procedure. |
+| Chilli | Vegetable Crops; Spice Crops | Green chilli and dry chilli differ at harvest and post-harvest. A good test case for multi-category crops. |
+| Groundnut | Oilseed Crops; Commercial / Cash Crops | Direct-sown. Post-harvest drying and storage are important stages. |
+| Onion | Vegetable Crops | Several raising methods exist. Model each as a procedure only where a source documents it. |
+
+**Rules for this set:**
+- Every procedure, variety, sowing window, input quantity, cost and yield must come from a citable Karnataka source (UAS Bengaluru/Dharwad, UAHS Shivamogga, UHS Bagalkot, KVKs, state departments) or ICAR. Nothing is filled in from general knowledge.
+- Varieties are limited to ones that Karnataka sources recommend.
+- The recommendation engine (Feature A) chooses only from these 6 crops at launch. Results must say this clearly (for example: "Showing suitable crops from the 6 currently supported"). This avoids implying that no other crop fits the plot.
+- Content load at launch: 6 crops × their procedures × 3 languages (kn/hi/en), plus audio and media for each stage.
+
+### 14.4 Still open
 
 1. ~~**Launch region**~~ — decided (D1).
 2. ~~**Languages at launch**~~ — decided (D2).
 3. ~~**Platform**~~ — decided (D3). Any specific technology preferences or constraints still welcome.
 4. ~~**MVP scope**~~ — decided (D4).
-5. **Launch crop list** — How many crops at launch, and which ones? (UI reference shows paddy, maize, tomato, chilli, groundnut, onion.)
-6. **Content & expert partners** — Do you have access to agronomists, KVKs, or an agricultural university for content and review?
+5. ~~**Launch crop list**~~ — decided (D6).
+6. ~~**Content & expert partners**~~ — decided (D5).
 7. **Media** — Do you plan to shoot your own videos/photos, use partner content, or embed official channels?
 8. **Sign-in** — Mobile OTP acceptable? Should browsing work without login?
 9. **Cultivation tracking (Journey C)** — In MVP or later?
