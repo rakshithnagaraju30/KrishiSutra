@@ -23,23 +23,29 @@ def page_text(html: str, base: str):
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     title = (soup.title.get_text(" ", strip=True) if soup.title else "")
-    # Tables: one row per line, cells separated by " | "
-    for table in soup.find_all("table"):
-        rows = []
-        for tr in table.find_all("tr"):
-            cells = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
-            if any(cells):
-                rows.append(" | ".join(cells))
-        table.replace_with("\n[TABLE]\n" + "\n".join(rows) + "\n[/TABLE]\n")
-    text = soup.get_text("\n")
-    lines = [re.sub(r"[ \t\xa0]+", " ", l).strip() for l in text.splitlines()]
-    text = "\n".join(l for l in lines if l)
+    # Table cells become " | "-separated; nested layout tables repeat text, so duplicate lines are dropped.
+    for cell in soup.find_all(["td", "th"]):
+        cell.append(" | ")
+    for row in soup.find_all("tr"):
+        row.append("\n")
+    raw = soup.get_text("")
+    out, seen = [], set()
+    for line in raw.splitlines():
+        line = re.sub(r"[ \t\xa0]+", " ", line).strip(" |")
+        line = re.sub(r"(\s*\|\s*)+", " | ", line).strip()
+        if not line or line in seen:
+            continue
+        if line.startswith("Home | Seasons") or line.startswith("© All Rights") or "All Rights Reserved" in line:
+            continue
+        seen.add(line)
+        out.append(line)
+    text = "\n".join(out)
     host = urlparse(base).netloc
-    links, seen = [], set()
+    links, seen_links = [], set()
     for a in BeautifulSoup(html, "html.parser").find_all("a", href=True):
         href = urljoin(base, a["href"].strip())
-        if urlparse(href).netloc == host and href not in seen and not href.startswith("mailto:"):
-            seen.add(href)
+        if urlparse(href).netloc == host and href not in seen_links and not href.startswith("mailto:"):
+            seen_links.add(href)
             links.append(f"{a.get_text(' ', strip=True)[:80]} -> {href}")
     return title, text, links
 
