@@ -4,7 +4,7 @@
 |---|---|
 | Document | 01 — Product Vision & Requirements |
 | Phase | Phase 1: Shared understanding (no application code) |
-| Status | Draft for review |
+| Status | Draft — launch decisions recorded (§14.1) |
 | Last updated | 2026-11-15 |
 | UI reference | [`docs/assets/ui-reference-grow-crops.png`](../assets/ui-reference-grow-crops.png) |
 
@@ -190,9 +190,9 @@ Priority key: **M** = Must (MVP), **S** = Should, **C** = Could (later).
 |---|---|---|
 | F-01 | A user can own multiple **farms**; a farm has multiple **plots**. | M |
 | F-02 | Plot attributes: name, area + unit, location (point or boundary), soil type, water sources, soil tests (history), ownership/lease *(optional)*. | M |
-| F-03 | A **cultivation record** links a plot, crop, variety, season, procedure version, planned & actual sowing date. | S |
-| F-04 | Track **activities** (planned vs. done), **inputs & costs**, **observations/photos**, **harvest** quantity and sale price. | S |
-| F-05 | **Reminders/notifications** for planned activities, adjusted to actual sowing date. | S |
+| F-03 | A **cultivation record** links a plot, crop, variety, season, procedure version, planned & actual sowing date. | M (D4) |
+| F-04 | Track **activities** (planned vs. done), **inputs & costs**, **observations/photos**, **harvest** quantity and sale price. | M (D4) |
+| F-05 | **Reminders/notifications** for planned activities, adjusted to actual sowing date. | M (D4) |
 | F-06 | Plot **crop history** (previous crops) — useful for rotation advice later. | C |
 
 ### 5.5 Users, language & accessibility
@@ -444,12 +444,22 @@ This is a conceptual model to guide the database design phase — not a schema.
 
 ## 14. Open questions for the product owner
 
-These decisions shape the next phase (database & architecture design):
+### 14.1 Decisions recorded (2026-11-15)
 
-1. **Launch region** — Which state(s)/districts first? (The reference mentions Kannada, suggesting Karnataka.)
-2. **Languages at launch** — e.g., Kannada + English? Hindi too? Others?
-3. **Platform** — Android app first, web app, or both (e.g., cross-platform)? Any technology preferences or constraints?
-4. **MVP scope** — Both Feature A and Feature B in MVP, or Feature B (growing guide) first since Feature A depends on its knowledge base?
+| # | Topic | Decision | Implications |
+|---|---|---|---|
+| D1 | Launch region | **Karnataka** | Primary content sources: UAS Bengaluru, UAS Dharwad, UAHS Shivamogga, UHS Bagalkot, Karnataka KVKs, Karnataka Dept. of Agriculture/Horticulture. Karnataka's agro-climatic zones become the first region tags. Other states are added later through the same region tagging. |
+| D2 | Languages at launch | **Kannada, Hindi, English** | Every UI string, crop name (with local names), stage text and audio narration is needed in 3 languages. Translations need human review. Indic font support is needed for Kannada and Devanagari. |
+| D3 | Platform | **Cross-platform app (Android + iOS) and web** | Choose a stack in Phase 2 that shares code across mobile and web. Offline-first behaviour is required on mobile; the web can be online-first. The backend API is shared. |
+| D4 | MVP scope | **Feature A + Feature B + crop tracking (Journey C)** | Requirements F-03, F-04 and F-05 (crop plan, cultivation record, reminders) move from **S** to **M**. The MVP crop list should stay small so content quality is achievable. |
+| D5 | Expert partners | **Not yet** | Content starts from public, citable sources (SAU package-of-practices, ICAR publications). It is published with the status **"Source-cited — pending expert review"**, shown to users as a distinct label (in addition to Verified / Estimate / Not available). Finding a KVK or SAU review partner is an early project task. |
+
+### 14.2 Still open
+
+1. ~~**Launch region**~~ — decided (D1).
+2. ~~**Languages at launch**~~ — decided (D2).
+3. ~~**Platform**~~ — decided (D3). Any specific technology preferences or constraints still welcome.
+4. ~~**MVP scope**~~ — decided (D4).
 5. **Launch crop list** — How many crops at launch, and which ones? (UI reference shows paddy, maize, tomato, chilli, groundnut, onion.)
 6. **Content & expert partners** — Do you have access to agronomists, KVKs, or an agricultural university for content and review?
 7. **Media** — Do you plan to shoot your own videos/photos, use partner content, or embed official channels?
@@ -466,13 +476,11 @@ These decisions shape the next phase (database & architecture design):
 | Phase | Output |
 |---|---|
 | **1. Vision & requirements** *(this document)* | Shared understanding, open questions answered |
-| **2. Architecture & technology decisions** | Platform, stack, hosting, offline strategy, ADRs |
-| **3. Domain & database design** | Schema for knowledge vs. farmer data, versioning, localisation, provenance |
-| **4. Content pipeline** | CMS, review workflow, seed content for launch crops (from verified sources) |
-| **5. MVP build — Feature B** | Categories → crops → varieties → procedure → stage detail, offline, audio |
-| **6. MVP build — Feature A** | Inputs wizard, weather integration, rule-based suitability engine with explanations |
-| **7. Personalised plans & tracking** | Plans, real-date calendar, reminders, records |
-| **8. Field testing** | Usability testing with farmers; iterate |
+| **2. Architecture & technology decisions** | Cross-platform stack (mobile + web), backend, hosting, offline strategy, ADRs |
+| **3. Domain & database design** | Schema for knowledge vs. farmer data, versioning, localisation (kn/hi/en), provenance |
+| **4. Content pipeline** | CMS, review workflow, seed content for launch crops from Karnataka sources |
+| **5–7. MVP build** *(single MVP release per D4)* | Feature B (guide), Feature A (recommendations), personalised plans & crop tracking |
+| **8. Field testing** | Usability testing with Karnataka farmers; iterate |
 | **9. Extensions** | Market prices, pest diagnosis, community, expert chat |
 
 ---
