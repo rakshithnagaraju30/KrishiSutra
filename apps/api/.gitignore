@@ -3,3 +3,5 @@ node_modules
 .env
 # Generated Prisma Client (recreated by `npm install` / `prisma generate`)
 /generated
+# Compiled output (npm run build)
+/dist

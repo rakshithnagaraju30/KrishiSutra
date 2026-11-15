@@ -1,4 +1,4 @@
-name: API database
+name: API (backend + database)
 
 on:
   push:
@@ -63,5 +63,8 @@ jobs:
       - name: Seed (twice, to prove it is idempotent)
         run: npx prisma db seed && npx prisma db seed
 
-      - name: Integration tests
+      - name: Build (compile to dist/)
+        run: npm run build
+
+      - name: Tests (database integration + backend foundation)
         run: npm test

@@ -14,7 +14,11 @@ function createClient(): PrismaClient {
   if (!connectionString) {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env and fill it in.');
   }
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString,
+    // Without this, pg waits forever for a connection when the database is unreachable.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 5000),
+  });
   return new PrismaClient({
     adapter,
     log:
@@ -22,7 +26,9 @@ function createClient(): PrismaClient {
         ? ['query', 'warn', 'error']
         : process.env.NODE_ENV === 'test'
           ? ['warn'] // negative tests trigger expected constraint errors
-          : ['warn', 'error'],
+          : process.env.NODE_ENV === 'production'
+            ? ['warn'] // errors are logged safely by the API's error handler (Prisma messages can contain query values)
+            : ['warn', 'error'],
   });
 }
 

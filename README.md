@@ -11,8 +11,9 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 | 1. Product vision & requirements | ✅ Done |
 | 1b. Clickable prototype (Android APK) | ✅ `apps/mobile` |
 | 2. Architecture & technology stack | ✅ Decided (assumptions to confirm) |
-| Part 2. Database architecture & Prisma models | ✅ Done — awaiting approval for Part 3 |
-| Part 3. API | ⏭ Next (after approval) |
+| Part 2. Database architecture & Prisma models | ✅ Done |
+| Part 3.1 Backend foundation (Express + TypeScript) | ✅ Done — awaiting approval for Part 3.2 |
+| Part 3.2 Business APIs | ⏭ Next (after approval) |
 
 ## Documents
 
@@ -20,6 +21,7 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 - [02 — Architecture & Technology Stack](docs/architecture/02-technology-stack.md)
 - [03 — Database Architecture](docs/database/03-database-architecture.md)
 - [04 — ER Diagrams](docs/database/04-er-diagrams.md)
+- [05 — Backend Foundation](docs/backend/05-backend-foundation.md)
 - [Architecture Decision Records](docs/adr/README.md)
 - [UI reference — Grow Crops screens](docs/assets/ui-reference-grow-crops.png)
 
@@ -32,6 +34,6 @@ TypeScript · React Native + Expo (Android, iOS, web) · Node.js + Express API �
 | Path | Contents |
 |---|---|
 | `apps/mobile` | Farmer app prototype (Expo) — see its README |
-| `apps/api` | Database (Prisma schema, migrations, seed, tests); API in Part 3 |
+| `apps/api` | Backend: Express + TypeScript API (health endpoints so far) and the database (Prisma schema, migrations, seed, tests) |
 | `docs/` | Requirements, architecture, database design, ADRs |
-| `.github/workflows` | Android APK build · API database checks |
+| `.github/workflows` | Android APK build · API (backend + database) checks |

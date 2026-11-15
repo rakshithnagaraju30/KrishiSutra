@@ -1,0 +1,6 @@
+# Safety net for the whole repository: never commit environment files with secrets.
+.env
+.env.*
+!.env.example
+# Local editor / OS files
+.DS_Store

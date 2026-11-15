@@ -1,0 +1,13 @@
+{
+  // Production build: compiles src/ (and the generated Prisma Client) to dist/ as plain JavaScript.
+  // `.ts` import paths are rewritten to `.js` (rewriteRelativeImportExtensions).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "rewriteRelativeImportExtensions": true,
+    "sourceMap": true
+  },
+  "include": ["src", "generated"]
+}

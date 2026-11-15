@@ -39,7 +39,7 @@ regional languages, offline where possible.
 - Development branch: `claude/agriculture-platform-vision-7xftwo`. Don't push to other branches
   without permission. Don't open PRs unless asked.
 - The product owner wants to be **asked when in doubt** and to approve each part before the next.
-  **Part 3 has NOT been approved yet** — do not start it without approval.
+  **Part 3.1 (backend foundation) is done; Part 3.2 has NOT been approved yet** — do not start it without approval.
 
 ## 3. Decisions made (product owner)
 
@@ -62,7 +62,7 @@ videos, phone-OTP sign-in acceptable, business model, hosting provider/budget.
 |---|---|---|
 | Language | TypeScript everywhere | ADR 0001 |
 | Farmer app | React Native + **Expo SDK 58** (Expo Router), Android/iOS/web | ADR 0002 |
-| Backend | Node.js 22 + **Express.js** (added in Part 3) — modular structure | ADR 0003 → 0013 |
+| Backend | Node.js 22 + **Express.js 5** + TypeScript (in `apps/api`), pino logs, zod validation, helmet, CORS allow-list | ADR 0003 → 0013 |
 | Database | **PostgreSQL 16** + **Prisma ORM 7.10.1** (driver adapter `@prisma/adapter-pg`) | ADR 0004 → 0013 |
 | Offline | Crop packs for knowledge; SQLite + outbox sync for farmer data (on device) | ADR 0005 |
 | Content admin | React + Refine, editorial workflow | ADR 0006 |
@@ -106,6 +106,17 @@ All ADRs: `docs/adr/README.md`.
      (`.github/workflows/api-database.yml`: fresh DB → migrate deploy → drift check → seed ×2 → tests).
    - Design doc: `docs/database/03-database-architecture.md`; ER diagrams generated from the live DB:
      `docs/database/04-er-diagrams.md` (+ `er-overview.png`); ADR 0013.
+5. **Part 3.1 — backend foundation** — inside `apps/api/` (complete, awaiting approval for 3.2):
+   - Express 5 + TypeScript: `src/app.ts` (app factory, dependencies injected), `src/server.ts`
+     (validate env → `SELECT 1` → listen → graceful shutdown on SIGTERM/SIGINT; exits 1 if config is
+     invalid or the DB is unreachable), layers `routes/ → controllers/ → services/ → db/`.
+   - `src/config/env.ts` (zod; all problems reported, values never echoed), `src/config/logger.ts`
+     (pino JSON, redaction, safe error serialisation), middleware: request id + access log, helmet,
+     CORS allow-list, JSON body limit, zod `validate()`, 404, central error handler.
+   - Endpoints: `GET /api/v1`, `GET /api/v1/health`, `GET /api/v1/health/database` (503 on failure).
+   - Response shape: `{success:true,data}` / `{success:false,error:{code,message,details?,requestId}}`.
+   - 66 tests pass (30 new + 36 database). Production build: `npm run build` → `node dist/src/server.js`.
+   - Doc: `docs/backend/05-backend-foundation.md`.
 
 ## 6. Repository map
 
@@ -113,7 +124,7 @@ All ADRs: `docs/adr/README.md`.
 AGENTS.md                      ← this file (CLAUDE.md imports it)
 README.md
 apps/mobile/                   Expo prototype (has its own AGENTS.md from the Expo template)
-apps/api/                      Prisma schema, migrations, seed, tests (API routes in Part 3)
+apps/api/                      Backend: Express API (src/app.ts, src/server.ts) + Prisma schema, migrations, seed, tests
   prisma.config.ts             Prisma 7 config (schema folder, migrations, seed, DATABASE_URL)
   prisma/schema/*.prisma       one file per module
   prisma/migrations/           init + check_constraints
@@ -133,6 +144,7 @@ docs/requirements/ docs/architecture/ docs/database/ docs/adr/ docs/assets/
 cd apps/api && cp .env.example .env && docker compose up -d   # or a local PostgreSQL
 npm install            # also runs prisma generate
 npm run db:deploy && npm run db:seed && npm test
+npm run dev            # API on http://localhost:3000/api/v1 ; production: npm run build && npm start
 npm run db:migrate     # after editing prisma/schema/*.prisma (also regenerates the client)
 npm run db:er          # regenerate ER diagrams from the database
 
@@ -158,15 +170,20 @@ cd apps/mobile && npm ci && npx tsc --noEmit && npx expo start
 - **Cloud sandbox network:** `dl.google.com` (Android SDK), `docs.expo.dev` and `prisma.io` are
   blocked; npm registry and GitHub work. Build APKs via GitHub Actions. Run Expo CLI with
   `EXPO_OFFLINE=1` (its version API is blocked) and check APIs against `node_modules` typings.
+- **Express:** `req.url` is rewritten inside routers — use `req.originalUrl` for full paths. Run the
+  server with `node` directly (not via `npx`/`npm`) so SIGTERM reaches it. Zod object-level refinements
+  don't run when a field fails — cross-field env rules are checked separately in `loadConfig`.
 - GitHub Actions on this repo: the Android workflow lets Gradle install SDK packages (explicit
   `sdkmanager "platforms;android-37"` failed). The repo is public, so release assets can be
   downloaded with plain `curl`.
 
 ## 9. Next steps (only after the product owner approves)
 
-**Part 3 — API (Express.js):** routers + services per module, zod validation, central error
-handling, auth (phone OTP per ADR 0009), ownership checks via `src/db/ownership.ts`, transactions for
-multi-record writes, publish/version workflow for procedures, task generation from pinned versions.
+**Part 3.2+ — business APIs:** add one module at a time under `apps/api/src` (`routes/` → `controllers/`
+→ `services/` → `repositories/` (create with the first module) + `validators/` zod schemas used by
+`middleware/validate.ts`); register sub-routers in `src/routes/index.ts`; throw `HttpError` for expected
+failures; auth (phone OTP per ADR 0009) + rate limiting; ownership checks via `src/db/ownership.ts`;
+transactions for multi-record writes; procedure publish/version workflow; task generation from pinned versions.
 Later: content admin app, recommendation rule engine, real verified content for the 6 launch crops,
 connecting the mobile prototype to the API, offline packs, reminders. Deferred database items are
 listed in `docs/database/03-database-architecture.md` §12 (PostGIS, LGD import, auth tables, audit log,
