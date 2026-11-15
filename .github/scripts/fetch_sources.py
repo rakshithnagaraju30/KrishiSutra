@@ -7,6 +7,7 @@ Usage: python fetch_sources.py "<url1> <url2> …"   (max 25 URLs, whitespace/ne
 import io
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 
@@ -62,7 +63,18 @@ def main():
     for i, url in enumerate(urls, 1):
         print(f"\n===== SOURCE {i}: {url} =====")
         try:
-            r = requests.get(url, headers=HEADERS, timeout=40)
+            # Some university servers intermittently present an expired certificate. Certificates are
+            # always verified; we only retry a few times in case another server answers.
+            r = None
+            for attempt in range(1, 5):
+                try:
+                    r = requests.get(url, headers=HEADERS, timeout=40)
+                    break
+                except requests.exceptions.SSLError as exc:
+                    print(f"attempt {attempt}: TLS error, retrying ({type(exc).__name__})")
+                    time.sleep(3 * attempt)
+            if r is None:
+                raise RuntimeError("TLS certificate could not be verified after 4 attempts; page skipped")
             print(f"HTTP {r.status_code} | {r.headers.get('content-type', '')}")
             if "pdf" in r.headers.get("content-type", "").lower() or url.lower().endswith(".pdf"):
                 body, links, title = pdf_text(r.content), [], "(PDF)"
