@@ -27,7 +27,7 @@ model Language {
 model User {
   id                  String        @id @default(uuid(7)) @db.Uuid
   fullName            String        @db.VarChar(150)
-  /// Stored lower-cased by the application. At least one of email/phone is required (CHECK).
+  /// Stored lower-cased by the application. Email or phone is required unless isDeviceAccount (CHECK).
   email               String?       @unique @db.VarChar(254)
   /// E.164 format, e.g. +919876543210.
   phone               String?       @unique @db.VarChar(20)
@@ -36,6 +36,8 @@ model User {
   profileImageFileId  String?       @unique @db.Uuid
   preferredLanguageId String?       @db.Uuid
   status              AccountStatus @default(PENDING_VERIFICATION)
+  /// Account created automatically by the app (no login yet). Can later be linked to a phone number.
+  isDeviceAccount     Boolean       @default(false)
   emailVerifiedAt     DateTime?     @db.Timestamptz(6)
   phoneVerifiedAt     DateTime?     @db.Timestamptz(6)
   lastLoginAt         DateTime?     @db.Timestamptz(6)
@@ -47,11 +49,12 @@ model User {
   preferredLanguage Language? @relation(fields: [preferredLanguageId], references: [id], onDelete: SetNull)
 
   // Identity & roles
-  roles                  UserRole[]      @relation("UserRoles")
-  rolesAssigned          UserRole[]      @relation("RoleAssignedBy")
-  expertProfile          ExpertProfile?  @relation("ExpertProfileUser")
-  expertProfilesVerified ExpertProfile[] @relation("ExpertVerifiedBy")
-  files                  UserFile[]      @relation("UserFileOwner")
+  roles                  UserRole[]         @relation("UserRoles")
+  rolesAssigned          UserRole[]         @relation("RoleAssignedBy")
+  expertProfile          ExpertProfile?     @relation("ExpertProfileUser")
+  expertProfilesVerified ExpertProfile[]    @relation("ExpertVerifiedBy")
+  files                  UserFile[]         @relation("UserFileOwner")
+  deviceCredentials      DeviceCredential[]
 
   // Farmer data
   farms           Farm[]
@@ -160,4 +163,21 @@ model UserFile {
 
   @@unique([storageProvider, storageKey])
   @@index([ownerId, purpose])
+}
+
+/// A secret bearer token issued to one installation of the app ("no login" accounts, ADR 0009 interim).
+/// Only the SHA-256 hash of the token is stored; the token itself is shown once, at registration.
+model DeviceCredential {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String    @db.Uuid
+  tokenHash   String    @unique @db.Char(64)
+  platform    String?   @db.VarChar(20)
+  deviceLabel String?   @db.VarChar(100)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  lastUsedAt  DateTime? @db.Timestamptz(6)
+  revokedAt   DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

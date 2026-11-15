@@ -45,6 +45,7 @@ function buildApp(options: { env?: Record<string, string>; checkDatabase?: Datab
   return createApp({
     config,
     logger,
+    prisma,
     checkDatabase: options.checkDatabase ?? createDatabaseCheck(prisma),
     isShuttingDown: options.isShuttingDown,
   });
@@ -78,10 +79,10 @@ describe('GET /api/v1 (API root)', () => {
     assert.equal(res.body.data.name, 'KrishiSutra API');
     assert.equal(res.body.data.apiVersion, 'v1');
     assert.equal(res.body.data.version, '0.1.0');
-    assert.deepEqual(
-      res.body.data.endpoints.map((e: { path: string }) => e.path),
-      ['/api/v1', '/api/v1/health', '/api/v1/health/database'],
-    );
+    const paths = res.body.data.endpoints.map((e: { path: string }) => e.path);
+    for (const p of ['/api/v1', '/api/v1/health', '/api/v1/health/database', '/api/v1/crops', '/api/v1/weather', '/api/v1/recommendations']) {
+      assert.ok(paths.includes(p), `endpoint list includes ${p}`);
+    }
     assert.match(res.headers['x-request-id'] ?? '', UUID);
   });
 });

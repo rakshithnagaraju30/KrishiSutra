@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   }
 
   let shuttingDown = false;
-  const app = createApp({ config, logger, checkDatabase, isShuttingDown: () => shuttingDown });
+  const app = createApp({ config, logger, prisma, checkDatabase, isShuttingDown: () => shuttingDown });
   const server = app.listen(config.port, config.host);
 
   server.on('listening', () => {

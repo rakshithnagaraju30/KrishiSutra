@@ -27,6 +27,7 @@ export type AppConfig = {
   requestBodyLimit: string;
   /** Express "trust proxy" setting: false, true, or number of proxy hops. */
   trustProxy: boolean | number;
+  rateLimit: { apiPerMinute: number; registrationsPerHour: number };
   appVersion: string;
 };
 
@@ -80,6 +81,8 @@ const schema = z
       .string()
       .regex(/^(true|false|\d+)$/, 'must be true, false or a number of proxy hops')
       .default('false'),
+    RATE_LIMIT_PER_MINUTE: z.coerce.number({ error: 'must be a number' }).int().min(1, 'must be at least 1').default(300),
+    DEVICE_REGISTRATIONS_PER_HOUR: z.coerce.number({ error: 'must be a number' }).int().min(1, 'must be at least 1').default(20),
   });
 
 function splitList(value: string): string[] {
@@ -135,6 +138,7 @@ export function loadConfig(source: Record<string, string | undefined>): AppConfi
     logLevel: env.LOG_LEVEL ?? defaultLogLevel[env.NODE_ENV],
     requestBodyLimit: env.REQUEST_BODY_LIMIT.toLowerCase(),
     trustProxy: env.TRUST_PROXY === 'true' ? true : env.TRUST_PROXY === 'false' ? false : Number(env.TRUST_PROXY),
+    rateLimit: { apiPerMinute: env.RATE_LIMIT_PER_MINUTE, registrationsPerHour: env.DEVICE_REGISTRATIONS_PER_HOUR },
     appVersion: readAppVersion(),
   };
 }
