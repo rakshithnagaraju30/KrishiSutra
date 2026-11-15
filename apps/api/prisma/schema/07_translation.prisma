@@ -1,0 +1,91 @@
+// MODULE 6 — Language and translation
+//
+// Base tables keep the canonical English text (fallback). Translation holds the text for any other
+// language, one row per (target record, field, language).
+//
+// Referential integrity: "exclusive arc" — one nullable foreign key per translatable table, and a
+// CHECK constraint (num_nonnulls(...) = 1) guarantees each row points at exactly one record.
+// Deleting a record cascades to its translations. Each target has its own unique index
+// (target, field, language) so a field can only be translated once per language.
+
+model Translation {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  languageId   String            @db.Uuid
+  field        TranslatableField
+  value        String
+  status       TranslationStatus @default(DRAFT)
+  reviewedById String?           @db.Uuid
+  reviewedAt   DateTime?         @db.Timestamptz(6)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(6)
+
+  // ---- exclusive-arc targets (exactly one is set) ----
+  cropCategoryId       String? @db.Uuid
+  cropId               String? @db.Uuid
+  cropVarietyId        String? @db.Uuid
+  growingProcedureId   String? @db.Uuid
+  growingStageId       String? @db.Uuid
+  stageInstructionId   String? @db.Uuid
+  stageResourceId      String? @db.Uuid
+  stageCommonMistakeId String? @db.Uuid
+  mediaAssetId         String? @db.Uuid
+  soilTypeId           String? @db.Uuid
+  seasonId             String? @db.Uuid
+  regionId             String? @db.Uuid
+  agronomicParameterId String? @db.Uuid
+  waterSourceTypeId    String? @db.Uuid
+  stageTypeId          String? @db.Uuid
+  cultivationMethodId  String? @db.Uuid
+  cropDiseaseId        String? @db.Uuid
+  cropPestId           String? @db.Uuid
+  diseaseSymptomId     String? @db.Uuid
+  diseaseTreatmentId   String? @db.Uuid
+
+  language   Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  reviewedBy User?    @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  cropCategory       CropCategory?       @relation(fields: [cropCategoryId], references: [id], onDelete: Cascade)
+  crop               Crop?               @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  cropVariety        CropVariety?        @relation(fields: [cropVarietyId], references: [id], onDelete: Cascade)
+  growingProcedure   GrowingProcedure?   @relation(fields: [growingProcedureId], references: [id], onDelete: Cascade)
+  growingStage       GrowingStage?       @relation(fields: [growingStageId], references: [id], onDelete: Cascade)
+  stageInstruction   StageInstruction?   @relation(fields: [stageInstructionId], references: [id], onDelete: Cascade)
+  stageResource      StageResource?      @relation(fields: [stageResourceId], references: [id], onDelete: Cascade)
+  stageCommonMistake StageCommonMistake? @relation(fields: [stageCommonMistakeId], references: [id], onDelete: Cascade)
+  mediaAsset         MediaAsset?         @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  soilType           SoilType?           @relation(fields: [soilTypeId], references: [id], onDelete: Cascade)
+  season             Season?             @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  region             Region?             @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  agronomicParameter AgronomicParameter? @relation(fields: [agronomicParameterId], references: [id], onDelete: Cascade)
+  waterSourceType    WaterSourceType?    @relation(fields: [waterSourceTypeId], references: [id], onDelete: Cascade)
+  stageType          StageType?          @relation(fields: [stageTypeId], references: [id], onDelete: Cascade)
+  cultivationMethod  CultivationMethod?  @relation(fields: [cultivationMethodId], references: [id], onDelete: Cascade)
+  cropDisease        CropDisease?        @relation(fields: [cropDiseaseId], references: [id], onDelete: Cascade)
+  cropPest           CropPest?           @relation(fields: [cropPestId], references: [id], onDelete: Cascade)
+  diseaseSymptom     DiseaseSymptom?     @relation(fields: [diseaseSymptomId], references: [id], onDelete: Cascade)
+  diseaseTreatment   DiseaseTreatment?   @relation(fields: [diseaseTreatmentId], references: [id], onDelete: Cascade)
+
+  reviews ContentReview[]
+
+  @@unique([cropCategoryId, field, languageId])
+  @@unique([cropId, field, languageId])
+  @@unique([cropVarietyId, field, languageId])
+  @@unique([growingProcedureId, field, languageId])
+  @@unique([growingStageId, field, languageId])
+  @@unique([stageInstructionId, field, languageId])
+  @@unique([stageResourceId, field, languageId])
+  @@unique([stageCommonMistakeId, field, languageId])
+  @@unique([mediaAssetId, field, languageId])
+  @@unique([soilTypeId, field, languageId])
+  @@unique([seasonId, field, languageId])
+  @@unique([regionId, field, languageId])
+  @@unique([agronomicParameterId, field, languageId])
+  @@unique([waterSourceTypeId, field, languageId])
+  @@unique([stageTypeId, field, languageId])
+  @@unique([cultivationMethodId, field, languageId])
+  @@unique([cropDiseaseId, field, languageId])
+  @@unique([cropPestId, field, languageId])
+  @@unique([diseaseSymptomId, field, languageId])
+  @@unique([diseaseTreatmentId, field, languageId])
+  @@index([languageId, status])
+}

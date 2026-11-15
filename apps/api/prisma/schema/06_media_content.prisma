@@ -1,0 +1,156 @@
+// MODULE 5 — Educational media, content sources and expert review
+
+/// Where a piece of agricultural knowledge comes from (ICAR, SAU package of practices, KVK, ...).
+model ContentSource {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  sourceType      SourceType
+  title           String      @db.VarChar(300)
+  organization    String?     @db.VarChar(200)
+  authors         String?     @db.VarChar(300)
+  publicationYear Int?        @db.SmallInt
+  url             String?     @db.VarChar(2048)
+  /// ISBN, DOI or bulletin number.
+  identifier      String?     @db.VarChar(100)
+  regionId        String?     @db.Uuid
+  licenseType     LicenseType @default(UNKNOWN)
+  notes           String?
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(6)
+
+  region Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  cropVarieties           CropVariety[]
+  cropRequirements        CropRequirement[]
+  cropSeasonMappings      CropSeasonMapping[]
+  cropSoilSuitabilities   CropSoilSuitability[]
+  cropRegionSuitabilities CropRegionSuitability[]
+  cropEconomics           CropEconomics[]
+  procedureVersions       ProcedureVersion[]
+  stageInstructions       StageInstruction[]
+  stageCommonMistakes     StageCommonMistake[]
+  mediaAssets             MediaAsset[]
+  diseases                CropDisease[]
+  pests                   CropPest[]
+  diseaseMappings         CropDiseaseMapping[]
+  pestMappings            CropPestMapping[]
+  treatments              DiseaseTreatment[]
+  inputRecommendations    InputRecommendation[]
+  recommendationReasons   CropRecommendationReason[]
+
+  @@index([sourceType])
+}
+
+/// Curated educational media (photos, real farm videos, animations, diagrams, audio, PDFs).
+/// Files live in object storage (S3-compatible / Cloudinary) or are embedded (YouTube);
+/// only URL + metadata + licence/attribution are stored here.
+model MediaAsset {
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  mediaType           MediaType
+  title               String             @db.VarChar(200)
+  description         String?
+  storageProvider     StorageProvider
+  storageKey          String?            @db.VarChar(512)
+  url                 String             @db.VarChar(2048)
+  thumbnailUrl        String?            @db.VarChar(2048)
+  mimeType            String?            @db.VarChar(100)
+  fileSizeBytes       BigInt?
+  durationSeconds     Int?
+  widthPx             Int?
+  heightPx            Int?
+  /// Spoken/written language; null for language-neutral media such as photos.
+  languageId          String?            @db.Uuid
+  sourceId            String?            @db.Uuid
+  licenseType         LicenseType        @default(UNKNOWN)
+  licenseDetails      String?
+  attributionText     String?            @db.VarChar(500)
+  /// Reference to written permission from the rights holder, when licenseType = PERMISSION_GRANTED.
+  permissionReference String?            @db.VarChar(300)
+  checksumSha256      String?            @db.Char(64)
+  status              ContentStatus      @default(DRAFT)
+  verificationStatus  VerificationStatus @default(UNVERIFIED)
+  uploadedById        String?            @db.Uuid
+  createdAt           DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?          @db.Timestamptz(6)
+
+  language   Language?      @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  source     ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  uploadedBy User?          @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  stageMedia        StageMedia[]
+  cropMedia         CropMedia[]
+  categoryImages    CropCategory[]        @relation("CategoryImage")
+  cropHeroImages    Crop[]                @relation("CropHeroImage")
+  diseaseHeroImages CropDisease[]         @relation("DiseaseHeroImage")
+  pestHeroImages    CropPest[]            @relation("PestHeroImage")
+  symptomMedia      DiseaseSymptomMedia[]
+  reviews           ContentReview[]
+  translations      Translation[]
+
+  @@unique([storageProvider, storageKey])
+  @@index([mediaType, status])
+  @@index([languageId])
+  @@index([sourceId])
+}
+
+/// Links educational media to a growing stage (optionally to one instruction in it).
+model StageMedia {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  stageId       String            @db.Uuid
+  mediaAssetId  String            @db.Uuid
+  instructionId String?           @db.Uuid
+  purpose       StageMediaPurpose
+  sequence      Int               @default(0) @db.SmallInt
+  isPrimary     Boolean           @default(false)
+  caption       String?           @db.VarChar(300)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+
+  stage       GrowingStage      @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  mediaAsset  MediaAsset        @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+  instruction StageInstruction? @relation(fields: [instructionId], references: [id], onDelete: SetNull)
+
+  @@unique([stageId, mediaAssetId])
+  @@index([mediaAssetId])
+  @@index([instructionId])
+}
+
+/// An expert/editor review of one knowledge item.
+/// Exclusive arc: exactly ONE target column is non-null (CHECK constraint), and every target is a
+/// real foreign key — no untyped "entityType + entityId" polymorphism.
+model ContentReview {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  reviewerId String?        @db.Uuid
+  decision   ReviewDecision
+  comments   String?
+  reviewedAt DateTime       @default(now()) @db.Timestamptz(6)
+
+  procedureVersionId    String? @db.Uuid
+  mediaAssetId          String? @db.Uuid
+  cropRequirementId     String? @db.Uuid
+  cropVarietyId         String? @db.Uuid
+  cropEconomicsId       String? @db.Uuid
+  diseaseTreatmentId    String? @db.Uuid
+  inputRecommendationId String? @db.Uuid
+  translationId         String? @db.Uuid
+
+  reviewer            User?                @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+  procedureVersion    ProcedureVersion?    @relation(fields: [procedureVersionId], references: [id], onDelete: Cascade)
+  mediaAsset          MediaAsset?          @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  cropRequirement     CropRequirement?     @relation(fields: [cropRequirementId], references: [id], onDelete: Cascade)
+  cropVariety         CropVariety?         @relation(fields: [cropVarietyId], references: [id], onDelete: Cascade)
+  cropEconomics       CropEconomics?       @relation(fields: [cropEconomicsId], references: [id], onDelete: Cascade)
+  diseaseTreatment    DiseaseTreatment?    @relation(fields: [diseaseTreatmentId], references: [id], onDelete: Cascade)
+  inputRecommendation InputRecommendation? @relation(fields: [inputRecommendationId], references: [id], onDelete: Cascade)
+  translation         Translation?         @relation(fields: [translationId], references: [id], onDelete: Cascade)
+
+  @@index([reviewerId])
+  @@index([procedureVersionId])
+  @@index([mediaAssetId])
+  @@index([cropRequirementId])
+  @@index([cropVarietyId])
+  @@index([cropEconomicsId])
+  @@index([diseaseTreatmentId])
+  @@index([inputRecommendationId])
+  @@index([translationId])
+}

@@ -1,0 +1,249 @@
+// MODULE 3 — Crops, varieties and crop requirements (verified agricultural knowledge)
+//
+// Variety-scoped rows carry BOTH cropId and cropVarietyId. The variety relation is a composite
+// foreign key (cropVarietyId, cropId) → CropVariety(id, cropId), so a row can never point at a
+// variety that belongs to a different crop. cropVarietyId = null means "applies to the whole crop".
+
+model Crop {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  /// Canonical English name; other languages live in Translation.
+  commonName       String         @db.VarChar(150)
+  scientificName   String?        @db.VarChar(200)
+  slug             String         @unique @db.VarChar(160)
+  description      String?
+  lifeCycle        CropLifeCycle?
+  heroImageAssetId String?        @db.Uuid
+  status           ContentStatus  @default(DRAFT)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?      @db.Timestamptz(6)
+
+  heroImage MediaAsset? @relation("CropHeroImage", fields: [heroImageAssetId], references: [id], onDelete: SetNull)
+
+  varieties            CropVariety[]
+  categoryMappings     CropCategoryMapping[]
+  requirements         CropRequirement[]
+  seasonMappings       CropSeasonMapping[]
+  soilSuitabilities    CropSoilSuitability[]
+  regionSuitabilities  CropRegionSuitability[]
+  economics            CropEconomics[]
+  growingProcedures    GrowingProcedure[]
+  media                CropMedia[]
+  diseaseMappings      CropDiseaseMapping[]
+  pestMappings         CropPestMapping[]
+  inputRecommendations InputRecommendation[]
+  recommendationItems  CropRecommendationItem[]
+  farmCrops            FarmCrop[]
+  diagnoses            CropDiagnosis[]
+  posts                FarmerPost[]
+  consultations        ExpertConsultation[]
+  translations         Translation[]
+
+  @@index([status])
+}
+
+model CropVariety {
+  id                   String             @id @default(uuid(7)) @db.Uuid
+  cropId               String             @db.Uuid
+  name                 String             @db.VarChar(150)
+  slug                 String             @db.VarChar(160)
+  /// Official release code, if any.
+  code                 String?            @db.VarChar(50)
+  description          String?
+  releasingInstitution String?            @db.VarChar(200)
+  releaseYear          Int?               @db.SmallInt
+  isHybrid             Boolean?
+  sourceId             String?            @db.Uuid
+  status               ContentStatus      @default(DRAFT)
+  verificationStatus   VerificationStatus @default(UNVERIFIED)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(6)
+  deletedAt            DateTime?          @db.Timestamptz(6)
+
+  crop   Crop           @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  source ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  requirements         CropRequirement[]
+  seasonMappings       CropSeasonMapping[]
+  soilSuitabilities    CropSoilSuitability[]
+  regionSuitabilities  CropRegionSuitability[]
+  economics            CropEconomics[]
+  growingProcedures    GrowingProcedure[]
+  inputRecommendations InputRecommendation[]
+  recommendationItems  CropRecommendationItem[]
+  farmCrops            FarmCrop[]
+  reviews              ContentReview[]
+  translations         Translation[]
+
+  @@unique([cropId, slug])
+  /// Target of the composite foreign keys described at the top of this file.
+  @@unique([id, cropId])
+  @@index([cropId, status])
+}
+
+/// One verified requirement per row: e.g. SOIL_PH 5.5–7.0, ANNUAL_RAINFALL, TEMPERATURE,
+/// GROWING_DURATION_DAYS, or a qualitative WATER_NEED = HIGH. Optionally scoped to a variety,
+/// a region and/or a season. Each row cites its source; the recommendation engine reads only
+/// PUBLISHED rows and reports which row produced each reason.
+model CropRequirement {
+  id                 String                @id @default(uuid(7)) @db.Uuid
+  cropId             String                @db.Uuid
+  cropVarietyId      String?               @db.Uuid
+  regionId           String?               @db.Uuid
+  seasonId           String?               @db.Uuid
+  parameterId        String                @db.Uuid
+  minValue           Decimal?              @db.Decimal(12, 4)
+  maxValue           Decimal?              @db.Decimal(12, 4)
+  optimalMinValue    Decimal?              @db.Decimal(12, 4)
+  optimalMaxValue    Decimal?              @db.Decimal(12, 4)
+  unitId             String?               @db.Uuid
+  /// For qualitative requirements (e.g. water need HIGH).
+  level              QualitativeLevel?
+  importance         RequirementImportance @default(PREFERRED)
+  notes              String?
+  sourceId           String?               @db.Uuid
+  status             ContentStatus         @default(DRAFT)
+  verificationStatus VerificationStatus    @default(UNVERIFIED)
+  createdAt          DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime              @updatedAt @db.Timestamptz(6)
+
+  crop        Crop               @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  cropVariety CropVariety?       @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  region      Region?            @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  season      Season?            @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  parameter   AgronomicParameter @relation(fields: [parameterId], references: [id], onDelete: Restrict)
+  unit        MeasurementUnit?   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  source      ContentSource?     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  recommendationReasons CropRecommendationReason[]
+  reviews               ContentReview[]
+
+  @@index([cropId, parameterId, status])
+  @@index([cropVarietyId])
+  @@index([regionId])
+  @@index([seasonId])
+}
+
+/// Which seasons a crop/variety is grown in, optionally per region, with an optional sowing window (months 1–12).
+model CropSeasonMapping {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  cropId             String             @db.Uuid
+  cropVarietyId      String?            @db.Uuid
+  seasonId           String             @db.Uuid
+  regionId           String?            @db.Uuid
+  sowingStartMonth   Int?               @db.SmallInt
+  sowingEndMonth     Int?               @db.SmallInt
+  notes              String?
+  sourceId           String?            @db.Uuid
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+
+  crop        Crop           @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  cropVariety CropVariety?   @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  season      Season         @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  region      Region?        @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  source      ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([cropId, seasonId])
+  @@index([seasonId])
+  @@index([regionId])
+}
+
+model CropSoilSuitability {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  cropId             String             @db.Uuid
+  cropVarietyId      String?            @db.Uuid
+  soilTypeId         String             @db.Uuid
+  suitability        SuitabilityLevel
+  notes              String?
+  sourceId           String?            @db.Uuid
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+
+  crop        Crop           @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  cropVariety CropVariety?   @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  soilType    SoilType       @relation(fields: [soilTypeId], references: [id], onDelete: Restrict)
+  source      ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([cropId, soilTypeId])
+  @@index([soilTypeId])
+}
+
+/// Regional suitability (state, district or agro-climatic zone).
+model CropRegionSuitability {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  cropId             String             @db.Uuid
+  cropVarietyId      String?            @db.Uuid
+  regionId           String             @db.Uuid
+  suitability        SuitabilityLevel
+  notes              String?
+  sourceId           String?            @db.Uuid
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+
+  crop        Crop           @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  cropVariety CropVariety?   @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  region      Region         @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  source      ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@index([cropId, regionId])
+  @@index([regionId])
+}
+
+/// Reference cost of cultivation and yield ranges, always tied to a source, region and year
+/// (e.g. state cost-of-cultivation studies). Values are per ONE areaUnit (e.g. per acre).
+/// The recommendation engine copies these — it never invents investment or yield numbers.
+model CropEconomics {
+  id                   String             @id @default(uuid(7)) @db.Uuid
+  cropId               String             @db.Uuid
+  cropVarietyId        String?            @db.Uuid
+  regionId             String?            @db.Uuid
+  seasonId             String?            @db.Uuid
+  referenceYear        Int                @db.SmallInt
+  areaUnitId           String             @db.Uuid
+  costOfCultivationMin Decimal?           @db.Decimal(14, 2)
+  costOfCultivationMax Decimal?           @db.Decimal(14, 2)
+  currency             String             @default("INR") @db.Char(3)
+  yieldMin             Decimal?           @db.Decimal(14, 3)
+  yieldMax             Decimal?           @db.Decimal(14, 3)
+  yieldUnitId          String?            @db.Uuid
+  notes                String?
+  /// Required: economic figures without a source are not stored.
+  sourceId             String             @db.Uuid
+  status               ContentStatus      @default(DRAFT)
+  verificationStatus   VerificationStatus @default(UNVERIFIED)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(6)
+
+  crop        Crop             @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  cropVariety CropVariety?     @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  region      Region?          @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  season      Season?          @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  areaUnit    MeasurementUnit  @relation("EconomicsAreaUnit", fields: [areaUnitId], references: [id], onDelete: Restrict)
+  yieldUnit   MeasurementUnit? @relation("EconomicsYieldUnit", fields: [yieldUnitId], references: [id], onDelete: Restrict)
+  source      ContentSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  recommendationItems CropRecommendationItem[]
+  reviews             ContentReview[]
+
+  @@index([cropId, regionId, referenceYear])
+}
+
+/// Crop-level photo gallery (general images, not tied to a growing stage).
+model CropMedia {
+  cropId       String   @db.Uuid
+  mediaAssetId String   @db.Uuid
+  sequence     Int      @default(0) @db.SmallInt
+  caption      String?  @db.VarChar(300)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  crop       Crop       @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+
+  @@id([cropId, mediaAssetId])
+  @@index([mediaAssetId])
+}

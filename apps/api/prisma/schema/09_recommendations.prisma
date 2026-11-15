@@ -1,0 +1,155 @@
+// MODULE 8 — Crop recommendations
+//
+// Results are stored separately from crop knowledge. Each run records exactly what it used:
+// references to the farmer's records, a frozen input snapshot, the weather snapshots, and the
+// rule-set version — so any result can be explained and reproduced later.
+
+/// Weather data from external APIs. Kept apart from verified knowledge. Normalised columns are what
+/// the engine reads; rawPayload keeps the provider response for audit.
+model WeatherSnapshot {
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  provider            WeatherProvider
+  snapshotType        WeatherSnapshotType
+  /// Grid-cell centre (rounded) so nearby farms share snapshots.
+  latitude            Decimal             @db.Decimal(9, 6)
+  longitude           Decimal             @db.Decimal(9, 6)
+  regionId            String?             @db.Uuid
+  periodStart         DateTime            @db.Timestamptz(6)
+  periodEnd           DateTime            @db.Timestamptz(6)
+  fetchedAt           DateTime            @default(now()) @db.Timestamptz(6)
+  temperatureMinC     Decimal?            @db.Decimal(5, 2)
+  temperatureMaxC     Decimal?            @db.Decimal(5, 2)
+  temperatureMeanC    Decimal?            @db.Decimal(5, 2)
+  rainfallMm          Decimal?            @db.Decimal(8, 2)
+  relativeHumidityPct Decimal?            @db.Decimal(5, 2)
+  windSpeedKmph       Decimal?            @db.Decimal(6, 2)
+  rawPayload          Json?
+  createdAt           DateTime            @default(now()) @db.Timestamptz(6)
+
+  region Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  recommendations CropRecommendationWeather[]
+
+  @@index([latitude, longitude, snapshotType, periodStart])
+  @@index([regionId])
+}
+
+model CropRecommendation {
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  userId              String               @db.Uuid
+  farmPlotId          String?              @db.Uuid
+  seasonId            String?              @db.Uuid
+  regionId            String?              @db.Uuid
+  soilTypeId          String?              @db.Uuid
+  soilTestId          String?              @db.Uuid
+  latitude            Decimal?             @db.Decimal(9, 6)
+  longitude           Decimal?             @db.Decimal(9, 6)
+  budgetAmount        Decimal?             @db.Decimal(14, 2)
+  budgetCurrency      String               @default("INR") @db.Char(3)
+  recommendationDate  DateTime             @default(now()) @db.Timestamptz(6)
+  status              RecommendationStatus @default(PENDING)
+  /// Version of the documented rule set that produced the result (see ADR 0007).
+  ruleSetVersion      String               @db.VarChar(50)
+  explanation         String?
+  /// Share of the inputs the farmer provided (0–100).
+  dataCompletenessPct Decimal?             @db.Decimal(5, 2)
+  /// Input codes that were missing, e.g. {SOIL_TEST, BUDGET}.
+  missingInputs       String[]
+  /// Frozen copy of every input used (answers, water sources, soil values, ...). JSON is deliberate
+  /// here: it is an immutable audit document; the live records above can change later.
+  inputSnapshot       Json
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farmPlot FarmPlot? @relation(fields: [farmPlotId], references: [id], onDelete: SetNull)
+  season   Season?   @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  region   Region?   @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  soilType SoilType? @relation(fields: [soilTypeId], references: [id], onDelete: Restrict)
+  soilTest SoilTest? @relation(fields: [soilTestId], references: [id], onDelete: SetNull)
+
+  items            CropRecommendationItem[]
+  weatherSnapshots CropRecommendationWeather[]
+  notifications    Notification[]
+
+  @@index([userId, recommendationDate])
+  @@index([farmPlotId])
+}
+
+model CropRecommendationWeather {
+  recommendationId  String @db.Uuid
+  weatherSnapshotId String @db.Uuid
+
+  recommendation  CropRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  weatherSnapshot WeatherSnapshot    @relation(fields: [weatherSnapshotId], references: [id], onDelete: Restrict)
+
+  @@id([recommendationId, weatherSnapshotId])
+  @@index([weatherSnapshotId])
+}
+
+/// One recommended crop (or variety) in a run.
+/// suitabilityScore is only stored together with scoringMethod (CHECK). Investment and yield ranges
+/// are copied from a verified CropEconomics row (cropEconomicsId) and scaled to areaValue — never generated.
+model CropRecommendationItem {
+  id                     String           @id @default(uuid(7)) @db.Uuid
+  recommendationId       String           @db.Uuid
+  cropId                 String           @db.Uuid
+  cropVarietyId          String?          @db.Uuid
+  rank                   Int              @db.SmallInt
+  suitabilityLevel       SuitabilityLevel @default(UNKNOWN)
+  suitabilityScore       Decimal?         @db.Decimal(5, 2)
+  scoringMethod          String?          @db.VarChar(100)
+  summary                String?
+  cropEconomicsId        String?          @db.Uuid
+  areaValue              Decimal?         @db.Decimal(12, 4)
+  areaUnitId             String?          @db.Uuid
+  estimatedInvestmentMin Decimal?         @db.Decimal(14, 2)
+  estimatedInvestmentMax Decimal?         @db.Decimal(14, 2)
+  currency               String           @default("INR") @db.Char(3)
+  expectedYieldMin       Decimal?         @db.Decimal(14, 3)
+  expectedYieldMax       Decimal?         @db.Decimal(14, 3)
+  yieldUnitId            String?          @db.Uuid
+  createdAt              DateTime         @default(now()) @db.Timestamptz(6)
+
+  recommendation CropRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  crop           Crop               @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  cropVariety    CropVariety?       @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  cropEconomics  CropEconomics?     @relation(fields: [cropEconomicsId], references: [id], onDelete: Restrict)
+  areaUnit       MeasurementUnit?   @relation("RecItemAreaUnit", fields: [areaUnitId], references: [id], onDelete: Restrict)
+  yieldUnit      MeasurementUnit?   @relation("RecItemYieldUnit", fields: [yieldUnitId], references: [id], onDelete: Restrict)
+
+  reasons   CropRecommendationReason[]
+  farmCrops FarmCrop[]
+
+  @@unique([recommendationId, rank])
+  @@index([cropId])
+}
+
+/// Explainability: one row per evaluated criterion — reason, warning, exclusion or missing data —
+/// pointing at the verified CropRequirement and source that produced it.
+model CropRecommendationReason {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  itemId            String          @db.Uuid
+  kind              ReasonKind
+  /// e.g. SOIL_TYPE, SOIL_PH, SEASON, WATER_NEED, BUDGET.
+  criterionCode     String          @db.VarChar(50)
+  result            CriterionResult
+  /// Stable key translated by the apps, e.g. "reason.soil_ph.within_range".
+  reasonCode        String          @db.VarChar(100)
+  message           String?
+  observedValue     String?         @db.VarChar(100)
+  requiredValue     String?         @db.VarChar(100)
+  parameterId       String?         @db.Uuid
+  cropRequirementId String?         @db.Uuid
+  sourceId          String?         @db.Uuid
+  sequence          Int             @default(0) @db.SmallInt
+  createdAt         DateTime        @default(now()) @db.Timestamptz(6)
+
+  item            CropRecommendationItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  parameter       AgronomicParameter?    @relation(fields: [parameterId], references: [id], onDelete: SetNull)
+  cropRequirement CropRequirement?       @relation(fields: [cropRequirementId], references: [id], onDelete: SetNull)
+  source          ContentSource?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([itemId, kind])
+  @@index([cropRequirementId])
+}

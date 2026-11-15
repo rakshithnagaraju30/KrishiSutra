@@ -1,6 +1,6 @@
 # ADR 0004 — Database: PostgreSQL + PostGIS with Drizzle ORM
 
-- **Status:** Accepted
+- **Status:** Accepted — ORM choice superseded by [ADR 0013](0013-express-and-prisma.md) (Prisma on the server; Drizzle remains for on-device SQLite)
 - **Date:** 2026-11-15
 
 ## Context

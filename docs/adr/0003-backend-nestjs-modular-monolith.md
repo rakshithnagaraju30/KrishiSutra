@@ -1,6 +1,6 @@
 # ADR 0003 — Backend: NestJS modular monolith with REST + OpenAPI
 
-- **Status:** Accepted
+- **Status:** Accepted — framework choice superseded by [ADR 0013](0013-express-and-prisma.md) (Express.js); the modular structure still applies
 - **Date:** 2026-11-15
 
 ## Context

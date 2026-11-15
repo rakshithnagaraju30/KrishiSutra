@@ -1,0 +1,163 @@
+// MODULE 1 — User management (+ Language, shared with Module 6)
+
+model Language {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  /// BCP-47 / ISO 639-1 code, e.g. "en", "kn", "hi".
+  code         String   @unique @db.VarChar(10)
+  /// English name, e.g. "Kannada".
+  name         String   @db.VarChar(100)
+  /// Name in its own script, e.g. "ಕನ್ನಡ".
+  nativeName   String   @db.VarChar(100)
+  script       String?  @db.VarChar(50)
+  isActive     Boolean  @default(true)
+  /// Exactly one default (fallback) language — enforced by a partial unique index.
+  isDefault    Boolean  @default(false)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  usersPreferring User[]
+  translations    Translation[]
+  mediaAssets     MediaAsset[]
+  farmerPosts     FarmerPost[]
+
+  @@unique([isDefault], map: "Language_single_default_key", where: raw("\"isDefault\" = true"))
+}
+
+model User {
+  id                  String        @id @default(uuid(7)) @db.Uuid
+  fullName            String        @db.VarChar(150)
+  /// Stored lower-cased by the application. At least one of email/phone is required (CHECK).
+  email               String?       @unique @db.VarChar(254)
+  /// E.164 format, e.g. +919876543210.
+  phone               String?       @unique @db.VarChar(20)
+  /// Hash only (e.g. argon2id). Null for phone-OTP-only accounts. Never plain text.
+  passwordHash        String?       @db.VarChar(255)
+  profileImageFileId  String?       @unique @db.Uuid
+  preferredLanguageId String?       @db.Uuid
+  status              AccountStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt     DateTime?     @db.Timestamptz(6)
+  phoneVerifiedAt     DateTime?     @db.Timestamptz(6)
+  lastLoginAt         DateTime?     @db.Timestamptz(6)
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?     @db.Timestamptz(6)
+
+  profileImage      UserFile? @relation("UserProfileImage", fields: [profileImageFileId], references: [id], onDelete: SetNull)
+  preferredLanguage Language? @relation(fields: [preferredLanguageId], references: [id], onDelete: SetNull)
+
+  // Identity & roles
+  roles                  UserRole[]      @relation("UserRoles")
+  rolesAssigned          UserRole[]      @relation("RoleAssignedBy")
+  expertProfile          ExpertProfile?  @relation("ExpertProfileUser")
+  expertProfilesVerified ExpertProfile[] @relation("ExpertVerifiedBy")
+  files                  UserFile[]      @relation("UserFileOwner")
+
+  // Farmer data
+  farms           Farm[]
+  recommendations CropRecommendation[]
+  activityLogs    CropActivityLog[]
+  inputPurchases  InputPurchase[]
+
+  // Knowledge workflow (authoring / review)
+  procedureVersionsCreated  ProcedureVersion[] @relation("ProcedureVersionCreatedBy")
+  procedureVersionsApproved ProcedureVersion[] @relation("ProcedureVersionApprovedBy")
+  mediaUploaded             MediaAsset[]
+  contentReviews            ContentReview[]
+  translationsReviewed      Translation[]
+  treatmentsApproved        DiseaseTreatment[]
+  farmInputsCreated         FarmInput[]
+
+  // Diagnosis, notifications, community
+  diagnosesRequested     CropDiagnosis[]      @relation("DiagnosisRequestedBy")
+  diagnosesConfirmed     CropDiagnosis[]      @relation("DiagnosisConfirmedBy")
+  notifications          Notification[]
+  posts                  FarmerPost[]
+  comments               PostComment[]
+  consultationsRequested ExpertConsultation[] @relation("ConsultationFarmer")
+  consultationsAssigned  ExpertConsultation[] @relation("ConsultationExpert")
+
+  @@index([status])
+  @@index([preferredLanguageId])
+}
+
+/// FARMER, AGRI_EXPERT, ADMIN (+ CONTENT_EDITOR). Rows, not an enum, so roles can be added without a migration.
+model Role {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  users UserRole[]
+}
+
+model UserRole {
+  userId       String   @db.Uuid
+  roleId       String   @db.Uuid
+  assignedById String?  @db.Uuid
+  assignedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  user       User  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("RoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+/// Extra details for users with the AGRI_EXPERT role; verifiedAt marks an admin-verified expert.
+model ExpertProfile {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  userId             String    @unique @db.Uuid
+  organization       String?   @db.VarChar(200)
+  designation        String?   @db.VarChar(150)
+  specialization     String?   @db.VarChar(200)
+  qualification      String?   @db.VarChar(200)
+  registrationNumber String?   @db.VarChar(100)
+  regionId           String?   @db.Uuid
+  bio                String?
+  verifiedAt         DateTime? @db.Timestamptz(6)
+  verifiedById       String?   @db.Uuid
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(6)
+
+  user       User    @relation("ExpertProfileUser", fields: [userId], references: [id], onDelete: Cascade)
+  region     Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  verifiedBy User?   @relation("ExpertVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([regionId])
+}
+
+/// Files uploaded BY users (soil reports, crop photos, receipts, post images).
+/// Kept separate from MediaAsset (curated, licensed educational media): different ownership,
+/// privacy and lifecycle. Binary content lives in object storage; only metadata is stored here.
+model UserFile {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  ownerId          String          @db.Uuid
+  purpose          UserFilePurpose
+  storageProvider  StorageProvider
+  storageKey       String          @db.VarChar(512)
+  url              String          @db.VarChar(2048)
+  mimeType         String          @db.VarChar(100)
+  sizeBytes        BigInt?
+  checksumSha256   String?         @db.Char(64)
+  originalFileName String?         @db.VarChar(255)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  deletedAt        DateTime?       @db.Timestamptz(6)
+
+  owner User @relation("UserFileOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  profileOfUser    User?                 @relation("UserProfileImage")
+  soilTests        SoilTest[]
+  observationFiles CropObservationFile[]
+  diagnosisFiles   CropDiagnosisFile[]
+  postMedia        PostMedia[]
+  purchaseReceipts InputPurchase[]
+  expenseReceipts  CropExpense[]
+
+  @@unique([storageProvider, storageKey])
+  @@index([ownerId, purpose])
+}

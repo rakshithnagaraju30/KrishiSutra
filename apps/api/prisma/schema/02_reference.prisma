@@ -1,0 +1,204 @@
+// Reference (lookup) data shared by all modules. Every list here is admin-managed data, not an enum.
+// Covers SoilType, Season and Region from MODULE 3 plus supporting lookups.
+
+/// Units for every stored quantity (area, mass, volume, concentration, ...).
+/// toBaseFactor converts to the SI base of the dimension (m², kg, L, m, s); null when not linear (e.g. °C, pH).
+/// Local land units (gunta, cent, bigha) are rows here, optionally tied to the region where they apply.
+model MeasurementUnit {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  code         String        @unique @db.VarChar(30)
+  name         String        @db.VarChar(100)
+  symbol       String        @db.VarChar(20)
+  dimension    UnitDimension
+  toBaseFactor Decimal?      @db.Decimal(24, 12)
+  isLocal      Boolean       @default(false)
+  regionId     String?       @db.Uuid
+  isActive     Boolean       @default(true)
+  displayOrder Int           @default(0) @db.SmallInt
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
+
+  region Region? @relation(fields: [regionId], references: [id], onDelete: SetNull)
+
+  parameters               AgronomicParameter[]
+  cropRequirements         CropRequirement[]
+  economicsArea            CropEconomics[]          @relation("EconomicsAreaUnit")
+  economicsYield           CropEconomics[]          @relation("EconomicsYieldUnit")
+  stageInstructions        StageInstruction[]
+  farms                    Farm[]
+  farmPlots                FarmPlot[]
+  waterSources             WaterSource[]
+  soilTestResults          SoilTestResult[]
+  recommendationItemsArea  CropRecommendationItem[] @relation("RecItemAreaUnit")
+  recommendationItemsYield CropRecommendationItem[] @relation("RecItemYieldUnit")
+  farmCrops                FarmCrop[]
+  irrigationLogs           IrrigationLog[]
+  treatments               DiseaseTreatment[]
+  farmInputs               FarmInput[]
+  inputRecommendations     InputRecommendation[]
+  inputPurchases           InputPurchase[]
+  applicationLogsQuantity  InputApplicationLog[]    @relation("ApplicationQuantityUnit")
+  applicationLogsArea      InputApplicationLog[]    @relation("ApplicationAreaUnit")
+  cropExpenses             CropExpense[]
+  harvestsQuantity         HarvestRecord[]          @relation("HarvestQuantityUnit")
+  harvestsArea             HarvestRecord[]          @relation("HarvestAreaUnit")
+  salesRecords             SalesRecord[]
+
+  @@index([dimension])
+}
+
+/// Administrative hierarchy (country → state → district → sub-district → village) via parentId,
+/// plus agro-climatic zones (type AGRO_CLIMATIC_ZONE) that districts/sub-districts point to.
+/// code = Local Government Directory (LGD) code where known.
+model Region {
+  id                 String     @id @default(uuid(7)) @db.Uuid
+  parentId           String?    @db.Uuid
+  type               RegionType
+  name               String     @db.VarChar(150)
+  code               String?    @db.VarChar(20)
+  agroClimaticZoneId String?    @db.Uuid
+  latitude           Decimal?   @db.Decimal(9, 6)
+  longitude          Decimal?   @db.Decimal(9, 6)
+  isActive           Boolean    @default(true)
+  createdAt          DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @db.Timestamptz(6)
+
+  parent           Region?  @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children         Region[] @relation("RegionHierarchy")
+  agroClimaticZone Region?  @relation("RegionZone", fields: [agroClimaticZoneId], references: [id], onDelete: SetNull)
+  zoneMembers      Region[] @relation("RegionZone")
+
+  measurementUnits        MeasurementUnit[]
+  expertProfiles          ExpertProfile[]
+  cropRequirements        CropRequirement[]
+  cropSeasonMappings      CropSeasonMapping[]
+  cropRegionSuitabilities CropRegionSuitability[]
+  cropEconomics           CropEconomics[]
+  growingProcedures       GrowingProcedure[]
+  contentSources          ContentSource[]
+  farms                   Farm[]
+  recommendations         CropRecommendation[]
+  weatherSnapshots        WeatherSnapshot[]
+  inputRecommendations    InputRecommendation[]
+  salesMarkets            SalesRecord[]
+  translations            Translation[]
+
+  @@unique([type, code])
+  @@unique([parentId, type, name])
+  @@index([agroClimaticZoneId])
+}
+
+model SoilType {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  code         String   @unique @db.VarChar(30)
+  name         String   @db.VarChar(100)
+  description  String?
+  colorHex     String?  @db.Char(7)
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  farmPlots         FarmPlot[]
+  soilSuitabilities CropSoilSuitability[]
+  recommendations   CropRecommendation[]
+  translations      Translation[]
+}
+
+/// Kharif, Rabi, Zaid/Summer, Perennial... Month bounds are optional and only filled from sources.
+model Season {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  code              String   @unique @db.VarChar(30)
+  name              String   @db.VarChar(100)
+  description       String?
+  typicalStartMonth Int?     @db.SmallInt
+  typicalEndMonth   Int?     @db.SmallInt
+  isActive          Boolean  @default(true)
+  displayOrder      Int      @default(0) @db.SmallInt
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(6)
+
+  cropRequirements     CropRequirement[]
+  cropSeasonMappings   CropSeasonMapping[]
+  cropEconomics        CropEconomics[]
+  growingProcedures    GrowingProcedure[]
+  recommendations      CropRecommendation[]
+  farmCrops            FarmCrop[]
+  inputRecommendations InputRecommendation[]
+  translations         Translation[]
+}
+
+/// Measurable parameters shared by crop requirements, soil tests and nutrient recommendations
+/// (pH, EC, N, P, K, OC, micronutrients, temperature, rainfall, humidity, growing duration...).
+/// Sharing one table lets the recommendation engine compare a soil-test value with a requirement directly.
+model AgronomicParameter {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  code          String            @unique @db.VarChar(40)
+  name          String            @db.VarChar(100)
+  category      ParameterCategory
+  defaultUnitId String?           @db.Uuid
+  description   String?
+  isActive      Boolean           @default(true)
+  displayOrder  Int               @default(0) @db.SmallInt
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(6)
+
+  defaultUnit MeasurementUnit? @relation(fields: [defaultUnitId], references: [id], onDelete: Restrict)
+
+  cropRequirements      CropRequirement[]
+  soilTestResults       SoilTestResult[]
+  inputRecommendations  InputRecommendation[]
+  recommendationReasons CropRecommendationReason[]
+  translations          Translation[]
+
+  @@index([category])
+}
+
+/// Borewell, open well, river, canal, tank/pond, rainwater...
+model WaterSourceType {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  code         String   @unique @db.VarChar(30)
+  name         String   @db.VarChar(100)
+  description  String?
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  waterSources WaterSource[]
+  translations Translation[]
+}
+
+/// Optional classification of growing stages (land preparation, sowing, flowering...).
+/// Used for icons, filtering and analytics. Procedures are NOT forced to use every type.
+model StageType {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  code         String   @unique @db.VarChar(40)
+  name         String   @db.VarChar(100)
+  description  String?
+  iconName     String?  @db.VarChar(60)
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  stages          GrowingStage[]
+  diseaseMappings CropDiseaseMapping[]
+  pestMappings    CropPestMapping[]
+  translations    Translation[]
+}
+
+/// Transplanted, direct seeded, organic, protected cultivation, container / home garden...
+model CultivationMethod {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  code         String   @unique @db.VarChar(40)
+  name         String   @db.VarChar(100)
+  description  String?
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  growingProcedures GrowingProcedure[]
+  translations      Translation[]
+}

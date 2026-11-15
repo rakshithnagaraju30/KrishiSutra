@@ -1,0 +1,188 @@
+// MODULE 4 — Growing procedures (versioned)
+//
+// GrowingProcedure  = identity: "Transplanted paddy, Karnataka, Kharif" for a crop (optionally a variety).
+// ProcedureVersion  = an immutable snapshot of its content once PUBLISHED. Editing creates a new version.
+// GrowingStage      = ordered, crop-specific stages that belong to ONE version (stages are not shared
+//                     across versions, so farmers' plans pinned to an old version never change).
+// At most one PUBLISHED version per procedure (partial unique index).
+
+model GrowingProcedure {
+  id                  String        @id @default(uuid(7)) @db.Uuid
+  cropId              String        @db.Uuid
+  cropVarietyId       String?       @db.Uuid
+  regionId            String?       @db.Uuid
+  seasonId            String?       @db.Uuid
+  cultivationMethodId String?       @db.Uuid
+  name                String        @db.VarChar(200)
+  slug                String        @db.VarChar(200)
+  description         String?
+  /// Default procedure to show for the crop/variety when no better match exists.
+  isDefault           Boolean       @default(false)
+  status              ContentStatus @default(DRAFT)
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt           DateTime?     @db.Timestamptz(6)
+
+  crop              Crop               @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  cropVariety       CropVariety?       @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  region            Region?            @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  season            Season?            @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  cultivationMethod CultivationMethod? @relation(fields: [cultivationMethodId], references: [id], onDelete: Restrict)
+
+  versions     ProcedureVersion[]
+  stages       GrowingStage[]
+  farmCrops    FarmCrop[]
+  translations Translation[]
+
+  @@unique([cropId, slug])
+  /// Target of FarmCrop's composite FK (growingProcedureId, cropId).
+  @@unique([id, cropId])
+  @@index([cropVarietyId])
+  @@index([cropId, status])
+  @@index([regionId, seasonId])
+}
+
+model ProcedureVersion {
+  id                 String                 @id @default(uuid(7)) @db.Uuid
+  procedureId        String                 @db.Uuid
+  versionNumber      Int
+  status             ProcedureVersionStatus @default(DRAFT)
+  changeSummary      String?
+  verificationStatus VerificationStatus     @default(UNVERIFIED)
+  sourceId           String?                @db.Uuid
+  createdById        String?                @db.Uuid
+  approvedById       String?                @db.Uuid
+  submittedAt        DateTime?              @db.Timestamptz(6)
+  approvedAt         DateTime?              @db.Timestamptz(6)
+  publishedAt        DateTime?              @db.Timestamptz(6)
+  supersededAt       DateTime?              @db.Timestamptz(6)
+  createdAt          DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime               @updatedAt @db.Timestamptz(6)
+
+  procedure  GrowingProcedure @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  source     ContentSource?   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  createdBy  User?            @relation("ProcedureVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy User?            @relation("ProcedureVersionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  stages    GrowingStage[]
+  farmCrops FarmCrop[]
+  reviews   ContentReview[]
+
+  @@unique([procedureId, versionNumber])
+  /// Target of composite FKs from GrowingStage and FarmCrop.
+  @@unique([id, procedureId])
+  // status is part of the key for the same Prisma upsert reason as CropCategoryMapping.
+  @@unique([procedureId, status], map: "ProcedureVersion_one_published_per_procedure", where: raw("\"status\" = 'PUBLISHED'"))
+  @@index([status])
+}
+
+/// One stage of one procedure version. Stages are crop-specific and ordered by `sequence`;
+/// stageTypeId is an optional label, never a forced template.
+model GrowingStage {
+  id                 String         @id @default(uuid(7)) @db.Uuid
+  procedureVersionId String         @db.Uuid
+  procedureId        String         @db.Uuid
+  stageTypeId        String?        @db.Uuid
+  sequence           Int            @db.SmallInt
+  title              String         @db.VarChar(200)
+  description        String?
+  /// Day range relative to dayAnchor (e.g. day 21–30 after sowing). Null until sourced.
+  startDay           Int?           @db.SmallInt
+  endDay             Int?           @db.SmallInt
+  dayAnchor          StageDayAnchor @default(SOWING)
+  /// True for stages that run throughout the crop (e.g. pest monitoring).
+  isContinuous       Boolean        @default(false)
+  isOptional         Boolean        @default(false)
+  createdAt          DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @db.Timestamptz(6)
+
+  procedureVersion ProcedureVersion @relation(fields: [procedureVersionId, procedureId], references: [id, procedureId], onDelete: Cascade)
+  procedure        GrowingProcedure @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  stageType        StageType?       @relation(fields: [stageTypeId], references: [id], onDelete: Restrict)
+
+  instructions         StageInstruction[]
+  resources            StageResource[]
+  commonMistakes       StageCommonMistake[]
+  media                StageMedia[]
+  inputRecommendations InputRecommendation[]
+  tasks                CropTask[]
+  observations         CropObservation[]
+  translations         Translation[]
+
+  @@unique([procedureVersionId, sequence])
+  @@index([procedureId])
+  @@index([stageTypeId])
+}
+
+model StageInstruction {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  stageId         String          @db.Uuid
+  sequence        Int             @db.SmallInt
+  title           String          @db.VarChar(200)
+  description     String
+  instructionType InstructionType @default(ACTION)
+  durationValue   Decimal?        @db.Decimal(8, 2)
+  durationUnitId  String?         @db.Uuid
+  safetyLevel     SafetyLevel     @default(NONE)
+  safetyInfo      String?
+  sourceId        String?         @db.Uuid
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(6)
+
+  stage        GrowingStage     @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  durationUnit MeasurementUnit? @relation(fields: [durationUnitId], references: [id], onDelete: Restrict)
+  source       ContentSource?   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  media        StageMedia[]
+  resources    StageResource[]
+  tasks        CropTask[]
+  translations Translation[]
+
+  @@unique([stageId, sequence])
+}
+
+/// Materials, equipment, tools, machinery and labour a stage needs.
+/// (Educational media are StageMedia; recommended input QUANTITIES are InputRecommendation.)
+model StageResource {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  stageId       String            @db.Uuid
+  instructionId String?           @db.Uuid
+  resourceType  StageResourceType
+  name          String            @db.VarChar(200)
+  description   String?
+  farmInputId   String?           @db.Uuid
+  isOptional    Boolean           @default(false)
+  sequence      Int               @default(0) @db.SmallInt
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(6)
+
+  stage       GrowingStage      @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  instruction StageInstruction? @relation(fields: [instructionId], references: [id], onDelete: SetNull)
+  farmInput   FarmInput?        @relation(fields: [farmInputId], references: [id], onDelete: SetNull)
+
+  translations Translation[]
+
+  @@index([stageId, sequence])
+  @@index([instructionId])
+  @@index([farmInputId])
+}
+
+/// Common mistakes with consequence and preventive guidance.
+model StageCommonMistake {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  stageId     String   @db.Uuid
+  sequence    Int      @db.SmallInt
+  title       String   @db.VarChar(300)
+  consequence String?
+  prevention  String?
+  sourceId    String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  stage  GrowingStage   @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  source ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  translations Translation[]
+
+  @@unique([stageId, sequence])
+}

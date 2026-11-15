@@ -1,0 +1,67 @@
+name: API database
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-database.yml'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+  workflow_dispatch:
+
+concurrency:
+  group: api-database-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: krishisutra
+          POSTGRES_PASSWORD: krishisutra_ci
+          POSTGRES_DB: krishisutra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U krishisutra -d krishisutra"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://krishisutra:krishisutra_ci@localhost:5432/krishisutra?schema=public
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Install dependencies (also generates Prisma Client)
+        run: npm ci
+
+      - name: Validate schema
+        run: npx prisma validate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Apply migrations to a fresh database
+        run: npx prisma migrate deploy
+
+      - name: Check schema and database are in sync (no drift)
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code
+
+      - name: Seed (twice, to prove it is idempotent)
+        run: npx prisma db seed && npx prisma db seed
+
+      - name: Integration tests
+        run: npm test

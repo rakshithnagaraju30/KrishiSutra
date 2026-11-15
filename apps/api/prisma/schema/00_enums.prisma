@@ -1,0 +1,533 @@
+// Fixed status values and closed vocabularies used by application logic.
+// Dynamic, admin-managed lists (categories, crops, varieties, soil types, seasons, languages,
+// units, regions, water source types, stage types, cultivation methods) are TABLES, not enums.
+
+// ---------- Users ----------
+enum AccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum StorageProvider {
+  S3
+  CLOUDINARY
+  GCS
+  YOUTUBE
+  EXTERNAL_URL
+}
+
+enum UserFilePurpose {
+  PROFILE_IMAGE
+  SOIL_REPORT
+  CROP_PHOTO
+  DIAGNOSIS_IMAGE
+  POST_MEDIA
+  RECEIPT
+  OTHER
+}
+
+// ---------- Reference data ----------
+enum RegionType {
+  COUNTRY
+  STATE
+  DISTRICT
+  SUB_DISTRICT // taluk / tehsil / block
+  VILLAGE
+  AGRO_CLIMATIC_ZONE
+}
+
+enum UnitDimension {
+  AREA
+  MASS
+  VOLUME
+  LENGTH
+  TEMPERATURE
+  CONCENTRATION
+  RATIO
+  TIME
+  COUNT
+  RATE
+  OTHER
+}
+
+enum ParameterCategory {
+  SOIL
+  NUTRIENT
+  CLIMATE
+  WATER
+  CROP
+}
+
+enum QualitativeLevel {
+  VERY_LOW
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+// ---------- Knowledge workflow ----------
+enum ContentStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+  REJECTED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  SOURCE_CITED
+  EXPERT_VERIFIED
+}
+
+enum ReviewDecision {
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum SourceType {
+  ICAR_INSTITUTE
+  AGRICULTURAL_UNIVERSITY
+  KRISHI_VIGYAN_KENDRA
+  GOVERNMENT_DEPARTMENT
+  RESEARCH_PUBLICATION
+  AGRICULTURAL_EXPERT
+  INTERNAL_DEMO
+  OTHER
+}
+
+enum LicenseType {
+  CC0
+  CC_BY
+  CC_BY_SA
+  CC_BY_NC
+  CC_BY_NC_SA
+  PUBLIC_DOMAIN
+  GOVERNMENT_OPEN_DATA
+  PERMISSION_GRANTED
+  OWN_CONTENT
+  EMBED_ONLY
+  UNKNOWN
+}
+
+// ---------- Crops ----------
+enum CropLifeCycle {
+  ANNUAL
+  BIENNIAL
+  PERENNIAL
+}
+
+enum SuitabilityLevel {
+  HIGHLY_SUITABLE
+  SUITABLE
+  MODERATELY_SUITABLE
+  NOT_SUITABLE
+  UNKNOWN
+}
+
+enum RequirementImportance {
+  MANDATORY
+  PREFERRED
+  INFORMATIONAL
+}
+
+// ---------- Procedures ----------
+enum ProcedureVersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  PUBLISHED
+  SUPERSEDED
+  REJECTED
+  ARCHIVED
+}
+
+enum StageDayAnchor {
+  PROCEDURE_START
+  SOWING
+  TRANSPLANTING
+  PLANTING
+}
+
+enum InstructionType {
+  ACTION
+  OBSERVATION
+  PRECAUTION
+  TIP
+  DECISION
+}
+
+enum SafetyLevel {
+  NONE
+  CAUTION
+  WARNING
+  DANGER
+}
+
+enum StageResourceType {
+  MATERIAL
+  EQUIPMENT
+  TOOL
+  MACHINERY
+  INPUT
+  LABOUR
+  SERVICE
+}
+
+// ---------- Media ----------
+enum MediaType {
+  IMAGE
+  VIDEO
+  ANIMATION
+  DIAGRAM
+  AUDIO
+  DOCUMENT
+}
+
+enum StageMediaPurpose {
+  DEMONSTRATION
+  EXPLANATION
+  REFERENCE_PHOTO
+  AUDIO_NARRATION
+  DOCUMENT
+}
+
+// ---------- Translation ----------
+enum TranslatableField {
+  NAME
+  TITLE
+  DESCRIPTION
+  SHORT_DESCRIPTION
+  CONTENT
+  SAFETY_INFO
+  CONSEQUENCE
+  PREVENTION
+  CAPTION
+  TRANSCRIPT
+}
+
+enum TranslationStatus {
+  MACHINE_DRAFT
+  DRAFT
+  IN_REVIEW
+  APPROVED
+}
+
+// ---------- Farms ----------
+enum IrrigationMethod {
+  RAINFED
+  FLOOD
+  FURROW
+  BASIN
+  DRIP
+  SPRINKLER
+  MANUAL
+  OTHER
+}
+
+enum LandTenure {
+  OWNED
+  LEASED
+  SHARECROPPED
+  COMMUNITY
+  OTHER
+}
+
+enum WaterAvailability {
+  PERENNIAL
+  SEASONAL
+  UNRELIABLE
+  UNKNOWN
+}
+
+enum SoilTestSource {
+  SOIL_HEALTH_CARD
+  GOVERNMENT_LAB
+  PRIVATE_LAB
+  KRISHI_VIGYAN_KENDRA
+  FIELD_TEST_KIT
+  OTHER
+}
+
+// ---------- Recommendations ----------
+enum WeatherProvider {
+  OPEN_METEO
+  NASA_POWER
+  IMD
+  OTHER
+}
+
+enum WeatherSnapshotType {
+  CURRENT
+  FORECAST
+  HISTORICAL_NORMAL
+  OBSERVED
+}
+
+enum RecommendationStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  SUPERSEDED
+}
+
+enum ReasonKind {
+  REASON
+  WARNING
+  EXCLUSION
+  MISSING_DATA
+}
+
+enum CriterionResult {
+  SUITABLE
+  CAUTION
+  UNSUITABLE
+  UNKNOWN
+}
+
+// ---------- Crop lifecycle ----------
+enum CultivationStatus {
+  PLANNED
+  ACTIVE
+  HARVESTING
+  COMPLETED
+  FAILED
+  ABANDONED
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  POSTPONED
+  SKIPPED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum ReminderStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum ActivityType {
+  LAND_PREPARATION
+  SEED_TREATMENT
+  NURSERY
+  SOWING
+  TRANSPLANTING
+  IRRIGATION
+  FERTILIZER_APPLICATION
+  PEST_CONTROL
+  WEEDING
+  INTERCULTURE
+  PRUNING
+  HARVESTING
+  POST_HARVEST
+  OTHER
+}
+
+enum ObservationType {
+  GROWTH
+  PEST
+  DISEASE
+  NUTRIENT_DEFICIENCY
+  WEATHER_DAMAGE
+  WATER_STRESS
+  GENERAL
+}
+
+enum Severity {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ---------- Pests & diseases ----------
+enum PathogenType {
+  FUNGAL
+  BACTERIAL
+  VIRAL
+  PHYTOPLASMA
+  NEMATODE
+  PHYSIOLOGICAL
+  OTHER
+}
+
+enum PestType {
+  INSECT
+  MITE
+  NEMATODE
+  RODENT
+  BIRD
+  MOLLUSC
+  OTHER
+}
+
+enum PlantPart {
+  ROOT
+  STEM
+  LEAF
+  FLOWER
+  FRUIT
+  SEED
+  POD
+  WHOLE_PLANT
+}
+
+enum TreatmentType {
+  PREVENTIVE
+  CULTURAL
+  MECHANICAL
+  BIOLOGICAL
+  ORGANIC
+  CHEMICAL
+}
+
+enum DiagnosisStatus {
+  PENDING
+  AI_SUGGESTED
+  AWAITING_EXPERT
+  EXPERT_CONFIRMED
+  EXPERT_REJECTED
+  CLOSED
+}
+
+// ---------- Inputs & expenses ----------
+enum InputType {
+  SEED
+  PLANTING_MATERIAL
+  FERTILIZER
+  ORGANIC_MANURE
+  BIOFERTILIZER
+  INSECTICIDE
+  FUNGICIDE
+  HERBICIDE
+  BIOPESTICIDE
+  GROWTH_REGULATOR
+  SOIL_AMENDMENT
+  OTHER
+}
+
+enum QuantityBasis {
+  PER_ACRE
+  PER_HECTARE
+  PER_SQUARE_METRE
+  PER_PLANT
+  PER_TREE
+  PER_KG_SEED
+  PER_LITRE_WATER
+  TOTAL
+}
+
+enum ApplicationMethod {
+  BASAL
+  BROADCAST
+  BAND_PLACEMENT
+  TOP_DRESSING
+  FOLIAR_SPRAY
+  FERTIGATION
+  SEED_TREATMENT
+  SOIL_DRENCH
+  OTHER
+}
+
+enum ExpenseCategory {
+  SEEDS
+  FERTILIZER
+  ORGANIC_MANURE
+  PEST_CONTROL
+  LABOUR
+  IRRIGATION
+  MACHINERY
+  LAND_RENT
+  TRANSPORT
+  STORAGE
+  MARKETING
+  OTHER
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CREDIT
+  OTHER
+}
+
+// ---------- Harvest & sales ----------
+enum BuyerType {
+  MANDI_TRADER
+  COMMISSION_AGENT
+  FPO
+  PROCESSOR
+  EXPORTER
+  RETAIL_CONSUMER
+  GOVERNMENT_PROCUREMENT
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+}
+
+// ---------- Notifications & community ----------
+enum NotificationType {
+  TASK_REMINDER
+  WEATHER_ALERT
+  RECOMMENDATION_READY
+  CONTENT_UPDATE
+  DIAGNOSIS_UPDATE
+  CONSULTATION_UPDATE
+  COMMUNITY
+  SYSTEM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ModerationStatus {
+  PUBLISHED
+  UNDER_REVIEW
+  HIDDEN
+  REMOVED
+}
+
+enum ConsultationStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum ConsultationChannel {
+  CHAT
+  VOICE_CALL
+  VIDEO_CALL
+  FIELD_VISIT
+}

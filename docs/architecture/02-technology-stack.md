@@ -35,8 +35,8 @@ The stack follows from the Phase 1 decisions and requirements:
 |---|---|---|
 | Language & repo | **TypeScript everywhere**, one **monorepo** (pnpm workspaces + Turborepo) | [0001](../adr/0001-typescript-monorepo.md) |
 | Farmer app (Android, iOS, web) | **React Native with Expo** (Expo Router; web via react-native-web) | [0002](../adr/0002-cross-platform-client-expo.md) |
-| Backend | **Node.js + NestJS** modular monolith, REST + OpenAPI | [0003](../adr/0003-backend-nestjs-modular-monolith.md) |
-| Database | **PostgreSQL + PostGIS**, Drizzle ORM | [0004](../adr/0004-postgresql-postgis.md) |
+| Backend | **Node.js + Express.js** modular monolith, REST + OpenAPI (originally NestJS) | [0003](../adr/0003-backend-nestjs-modular-monolith.md), [0013](../adr/0013-express-and-prisma.md) |
+| Database | **PostgreSQL + PostGIS**, **Prisma ORM** on the server (originally Drizzle) | [0004](../adr/0004-postgresql-postgis.md), [0013](../adr/0013-express-and-prisma.md) |
 | Offline | Downloadable versioned **crop packs** for knowledge; **SQLite + outbox sync** for farmer data | [0005](../adr/0005-offline-strategy.md) |
 | Content admin | Separate **React admin app (Refine)** over our own API, with an editorial workflow | [0006](../adr/0006-content-admin-editorial-workflow.md) |
 | Recommendations | **Deterministic, data-driven rule engine** in a shared TypeScript package | [0007](../adr/0007-rule-based-recommendation-engine.md) |

@@ -1,0 +1,48 @@
+// MODULE 2 — Crop categories (dynamic, unlimited depth)
+
+/// Adjacency-list tree: parentId → parent category; any depth (query with a recursive CTE).
+/// A CHECK constraint stops a category being its own parent; deeper cycles are rejected by the
+/// application before saving (documented in docs/database).
+model CropCategory {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  parentId     String?   @db.Uuid
+  name         String    @db.VarChar(150)
+  slug         String    @unique @db.VarChar(160)
+  description  String?
+  /// Key of a bundled app icon, e.g. "cereal".
+  iconName     String?   @db.VarChar(60)
+  imageAssetId String?   @db.Uuid
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0) @db.SmallInt
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt    DateTime? @db.Timestamptz(6)
+
+  parent     CropCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children   CropCategory[] @relation("CategoryHierarchy")
+  imageAsset MediaAsset?    @relation("CategoryImage", fields: [imageAssetId], references: [id], onDelete: SetNull)
+
+  cropMappings CropCategoryMapping[]
+  translations Translation[]
+
+  @@index([parentId, displayOrder])
+}
+
+/// Many-to-many Crop ↔ CropCategory. Exactly zero or one row per crop may have isPrimary = true
+/// (partial unique index).
+model CropCategoryMapping {
+  cropId       String   @db.Uuid
+  categoryId   String   @db.Uuid
+  isPrimary    Boolean  @default(false)
+  displayOrder Int      @default(0) @db.SmallInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  crop     Crop         @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  category CropCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([cropId, categoryId])
+  // isPrimary is part of the key on purpose: with Prisma's preview partial indexes, a partial unique on
+  // [cropId] alone is wrongly chosen as the ON CONFLICT target of upsert(). Same rule, safe for upsert.
+  @@unique([cropId, isPrimary], map: "CropCategoryMapping_one_primary_per_crop", where: raw("\"isPrimary\" = true"))
+  @@index([categoryId, displayOrder])
+}

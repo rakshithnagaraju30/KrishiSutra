@@ -1,0 +1,120 @@
+// MODULE 13 — Notifications and community (future features).
+// Designed now so they can be built later without changing the core agricultural tables:
+// they only reference core tables; nothing in the core depends on them.
+
+model Notification {
+  id               String              @id @default(uuid(7)) @db.Uuid
+  userId           String              @db.Uuid
+  type             NotificationType
+  channel          NotificationChannel @default(IN_APP)
+  title            String              @db.VarChar(200)
+  body             String
+  status           NotificationStatus  @default(PENDING)
+  // Optional typed links to what the notification is about (plain FKs, no polymorphism).
+  cropTaskId       String?             @db.Uuid
+  farmCropId       String?             @db.Uuid
+  recommendationId String?             @db.Uuid
+  consultationId   String?             @db.Uuid
+  sentAt           DateTime?           @db.Timestamptz(6)
+  readAt           DateTime?           @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cropTask       CropTask?           @relation(fields: [cropTaskId], references: [id], onDelete: SetNull)
+  farmCrop       FarmCrop?           @relation(fields: [farmCropId], references: [id], onDelete: SetNull)
+  recommendation CropRecommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  consultation   ExpertConsultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+}
+
+model FarmerPost {
+  id         String           @id @default(uuid(7)) @db.Uuid
+  authorId   String           @db.Uuid
+  cropId     String?          @db.Uuid
+  languageId String?          @db.Uuid
+  title      String?          @db.VarChar(200)
+  body       String
+  status     ModerationStatus @default(PUBLISHED)
+  createdAt  DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt  DateTime?        @db.Timestamptz(6)
+
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  crop     Crop?     @relation(fields: [cropId], references: [id], onDelete: SetNull)
+  language Language? @relation(fields: [languageId], references: [id], onDelete: SetNull)
+
+  media    PostMedia[]
+  comments PostComment[]
+
+  @@index([cropId, createdAt])
+  @@index([authorId])
+}
+
+model PostMedia {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  postId    String   @db.Uuid
+  fileId    String   @db.Uuid
+  sequence  Int      @default(0) @db.SmallInt
+  caption   String?  @db.VarChar(300)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  post FarmerPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  file UserFile   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, fileId])
+  @@index([fileId])
+}
+
+model PostComment {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  postId          String           @db.Uuid
+  authorId        String           @db.Uuid
+  parentCommentId String?          @db.Uuid
+  body            String
+  /// Set when a verified expert answers.
+  isExpertAnswer  Boolean          @default(false)
+  status          ModerationStatus @default(PUBLISHED)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime?        @db.Timestamptz(6)
+
+  post          FarmerPost    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment PostComment?  @relation("CommentThread", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       PostComment[] @relation("CommentThread")
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+  @@index([parentCommentId])
+}
+
+model ExpertConsultation {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  farmerId          String              @db.Uuid
+  expertId          String?             @db.Uuid
+  farmCropId        String?             @db.Uuid
+  cropId            String?             @db.Uuid
+  diagnosisId       String?             @db.Uuid
+  subject           String              @db.VarChar(200)
+  description       String
+  channel           ConsultationChannel @default(CHAT)
+  status            ConsultationStatus  @default(OPEN)
+  requestedAt       DateTime            @default(now()) @db.Timestamptz(6)
+  assignedAt        DateTime?           @db.Timestamptz(6)
+  resolvedAt        DateTime?           @db.Timestamptz(6)
+  resolutionSummary String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(6)
+
+  farmer    User           @relation("ConsultationFarmer", fields: [farmerId], references: [id], onDelete: Cascade)
+  expert    User?          @relation("ConsultationExpert", fields: [expertId], references: [id], onDelete: SetNull)
+  farmCrop  FarmCrop?      @relation(fields: [farmCropId], references: [id], onDelete: SetNull)
+  crop      Crop?          @relation(fields: [cropId], references: [id], onDelete: SetNull)
+  diagnosis CropDiagnosis? @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
+
+  notifications Notification[]
+
+  @@index([farmerId, status])
+  @@index([expertId, status])
+}

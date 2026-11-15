@@ -1,0 +1,38 @@
+{
+  "name": "@krishisutra/api",
+  "version": "0.1.0",
+  "description": "KrishiSutra backend: PostgreSQL database (Prisma ORM). API routes come in Part 3.",
+  "scripts": {
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev && prisma generate",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force && prisma generate && prisma db seed",
+    "db:seed": "prisma db seed",
+    "db:status": "prisma migrate status",
+    "db:studio": "prisma studio",
+    "db:er": "tsx scripts/generate-er-diagrams.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_ENV=test node --import tsx --test --test-concurrency=1 \"tests/**/*.test.ts\"",
+    "postinstall": "prisma generate"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "dotenv": "^18.0.10",
+    "pg": "^8.23.1"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}

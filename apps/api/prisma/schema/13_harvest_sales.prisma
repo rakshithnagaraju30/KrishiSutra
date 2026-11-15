@@ -1,0 +1,64 @@
+// MODULE 12 — Harvest and sales
+
+/// One picking / cutting. A cultivation can have many (e.g. tomato, chilli pickings).
+model HarvestRecord {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  farmCropId      String    @db.Uuid
+  harvestNumber   Int       @default(1) @db.SmallInt
+  harvestDate     DateTime  @db.Date
+  quantity        Decimal   @db.Decimal(14, 3)
+  unitId          String    @db.Uuid
+  /// Grade names differ by commodity and market, so free text.
+  qualityGrade    String?   @db.VarChar(50)
+  moisturePct     Decimal?  @db.Decimal(5, 2)
+  areaHarvested   Decimal?  @db.Decimal(12, 4)
+  areaUnitId      String?   @db.Uuid
+  storageLocation String?   @db.VarChar(200)
+  notes           String?
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+
+  farmCrop FarmCrop         @relation(fields: [farmCropId], references: [id], onDelete: Cascade)
+  unit     MeasurementUnit  @relation("HarvestQuantityUnit", fields: [unitId], references: [id], onDelete: Restrict)
+  areaUnit MeasurementUnit? @relation("HarvestAreaUnit", fields: [areaUnitId], references: [id], onDelete: Restrict)
+
+  sales SalesRecord[]
+
+  @@unique([farmCropId, harvestNumber])
+  @@index([farmCropId, harvestDate])
+}
+
+/// Sale of (part of) a harvest. pricePerUnit is per `unitId`.
+/// CHECK: grossAmount = round(quantitySold × pricePerUnit, 2) and netAmount = grossAmount − deductions.
+model SalesRecord {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  harvestRecordId String        @db.Uuid
+  saleDate        DateTime      @db.Date
+  quantitySold    Decimal       @db.Decimal(14, 3)
+  unitId          String        @db.Uuid
+  pricePerUnit    Decimal       @db.Decimal(14, 2)
+  grossAmount     Decimal       @db.Decimal(14, 2)
+  /// Commission, transport, market fees...
+  deductions      Decimal       @default(0) @db.Decimal(14, 2)
+  netAmount       Decimal       @db.Decimal(14, 2)
+  currency        String        @default("INR") @db.Char(3)
+  buyerType       BuyerType?
+  buyerName       String?       @db.VarChar(200)
+  buyerContact    String?       @db.VarChar(100)
+  marketName      String?       @db.VarChar(200)
+  marketRegionId  String?       @db.Uuid
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentMode     PaymentMode?
+  notes           String?
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime?     @db.Timestamptz(6)
+
+  harvestRecord HarvestRecord   @relation(fields: [harvestRecordId], references: [id], onDelete: Cascade)
+  unit          MeasurementUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  marketRegion  Region?         @relation(fields: [marketRegionId], references: [id], onDelete: SetNull)
+
+  @@index([harvestRecordId])
+  @@index([saleDate])
+}

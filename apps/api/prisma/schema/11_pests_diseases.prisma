@@ -1,0 +1,245 @@
+// MODULE 10 — Disease and pest management
+//
+// Knowledge (CropDisease, CropPest, symptoms, treatments) is separate from a farmer's diagnosis.
+// AI suggestions (DiagnosisAiCandidate) are stored apart from the expert-confirmed result
+// (CropDiagnosis.confirmed*), so an AI guess can never be mistaken for a confirmed diagnosis.
+// Treatments: a CHEMICAL treatment cannot be PUBLISHED unless it is EXPERT_VERIFIED, approved and has a
+// regulatory reference (CHECK constraint) — unverified pesticide doses never become recommendations.
+
+model CropDisease {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  name               String             @db.VarChar(200)
+  slug               String             @unique @db.VarChar(200)
+  causalOrganism     String?            @db.VarChar(200)
+  pathogenType       PathogenType?
+  description        String?
+  heroImageAssetId   String?            @db.Uuid
+  sourceId           String?            @db.Uuid
+  status             ContentStatus      @default(DRAFT)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?          @db.Timestamptz(6)
+
+  heroImage MediaAsset?    @relation("DiseaseHeroImage", fields: [heroImageAssetId], references: [id], onDelete: SetNull)
+  source    ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  cropMappings       CropDiseaseMapping[]
+  symptoms           DiseaseSymptom[]
+  treatments         DiseaseTreatment[]
+  aiCandidates       DiagnosisAiCandidate[]
+  confirmedDiagnoses CropDiagnosis[]
+  translations       Translation[]
+
+  @@index([status])
+}
+
+model CropPest {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  commonName         String             @db.VarChar(200)
+  slug               String             @unique @db.VarChar(200)
+  scientificName     String?            @db.VarChar(200)
+  pestType           PestType?
+  description        String?
+  heroImageAssetId   String?            @db.Uuid
+  sourceId           String?            @db.Uuid
+  status             ContentStatus      @default(DRAFT)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @db.Timestamptz(6)
+  deletedAt          DateTime?          @db.Timestamptz(6)
+
+  heroImage MediaAsset?    @relation("PestHeroImage", fields: [heroImageAssetId], references: [id], onDelete: SetNull)
+  source    ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  cropMappings       CropPestMapping[]
+  symptoms           DiseaseSymptom[]
+  treatments         DiseaseTreatment[]
+  aiCandidates       DiagnosisAiCandidate[]
+  confirmedDiagnoses CropDiagnosis[]
+  translations       Translation[]
+
+  @@index([status])
+}
+
+/// Which crops a disease affects (and at which stage type it is most likely).
+model CropDiseaseMapping {
+  cropId                 String   @db.Uuid
+  diseaseId              String   @db.Uuid
+  susceptibleStageTypeId String?  @db.Uuid
+  notes                  String?
+  sourceId               String?  @db.Uuid
+  createdAt              DateTime @default(now()) @db.Timestamptz(6)
+
+  crop                 Crop           @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  disease              CropDisease    @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  susceptibleStageType StageType?     @relation(fields: [susceptibleStageTypeId], references: [id], onDelete: SetNull)
+  source               ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([cropId, diseaseId])
+  @@index([diseaseId])
+}
+
+model CropPestMapping {
+  cropId                 String   @db.Uuid
+  pestId                 String   @db.Uuid
+  susceptibleStageTypeId String?  @db.Uuid
+  notes                  String?
+  sourceId               String?  @db.Uuid
+  createdAt              DateTime @default(now()) @db.Timestamptz(6)
+
+  crop                 Crop           @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  pest                 CropPest       @relation(fields: [pestId], references: [id], onDelete: Cascade)
+  susceptibleStageType StageType?     @relation(fields: [susceptibleStageTypeId], references: [id], onDelete: SetNull)
+  source               ContentSource? @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+
+  @@id([cropId, pestId])
+  @@index([pestId])
+}
+
+/// A symptom of a disease OR of pest damage (exactly one of diseaseId / pestId — CHECK).
+model DiseaseSymptom {
+  id          String     @id @default(uuid(7)) @db.Uuid
+  diseaseId   String?    @db.Uuid
+  pestId      String?    @db.Uuid
+  plantPart   PlantPart?
+  description String
+  sequence    Int        @default(0) @db.SmallInt
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(6)
+
+  disease CropDisease? @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  pest    CropPest?    @relation(fields: [pestId], references: [id], onDelete: Cascade)
+
+  media        DiseaseSymptomMedia[]
+  translations Translation[]
+
+  @@index([diseaseId])
+  @@index([pestId])
+}
+
+/// Reference photographs of a symptom.
+model DiseaseSymptomMedia {
+  symptomId    String @db.Uuid
+  mediaAssetId String @db.Uuid
+  sequence     Int    @default(0) @db.SmallInt
+
+  symptom    DiseaseSymptom @relation(fields: [symptomId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset     @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict)
+
+  @@id([symptomId, mediaAssetId])
+  @@index([mediaAssetId])
+}
+
+/// Prevention / treatment for a disease OR pest (exactly one — CHECK).
+model DiseaseTreatment {
+  id                     String             @id @default(uuid(7)) @db.Uuid
+  diseaseId              String?            @db.Uuid
+  pestId                 String?            @db.Uuid
+  treatmentType          TreatmentType
+  title                  String             @db.VarChar(200)
+  description            String
+  farmInputId            String?            @db.Uuid
+  doseValue              Decimal?           @db.Decimal(12, 4)
+  doseUnitId             String?            @db.Uuid
+  doseBasis              QuantityBasis?
+  applicationMethod      ApplicationMethod?
+  /// Pre-harvest interval (days between last application and harvest).
+  preHarvestIntervalDays Int?               @db.SmallInt
+  safetyPrecautions      String?
+  /// e.g. CIB&RC registration / label-claim reference for chemical products.
+  regulatoryReference    String?            @db.VarChar(200)
+  sourceId               String?            @db.Uuid
+  status                 ContentStatus      @default(DRAFT)
+  verificationStatus     VerificationStatus @default(UNVERIFIED)
+  approvedById           String?            @db.Uuid
+  approvedAt             DateTime?          @db.Timestamptz(6)
+  createdAt              DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime           @updatedAt @db.Timestamptz(6)
+  deletedAt              DateTime?          @db.Timestamptz(6)
+
+  disease    CropDisease?     @relation(fields: [diseaseId], references: [id], onDelete: Cascade)
+  pest       CropPest?        @relation(fields: [pestId], references: [id], onDelete: Cascade)
+  farmInput  FarmInput?       @relation(fields: [farmInputId], references: [id], onDelete: SetNull)
+  doseUnit   MeasurementUnit? @relation(fields: [doseUnitId], references: [id], onDelete: Restrict)
+  source     ContentSource?   @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  approvedBy User?            @relation(fields: [approvedById], references: [id], onDelete: SetNull)
+
+  reviews      ContentReview[]
+  translations Translation[]
+
+  @@index([diseaseId, status])
+  @@index([pestId, status])
+}
+
+/// A farmer's request to identify a problem (from photos / an observation).
+model CropDiagnosis {
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  requestedById      String          @db.Uuid
+  farmCropId         String?         @db.Uuid
+  cropId             String?         @db.Uuid
+  observationId      String?         @db.Uuid
+  description        String?
+  status             DiagnosisStatus @default(PENDING)
+  // ---- expert-confirmed result (never written by the AI) ----
+  confirmedDiseaseId String?         @db.Uuid
+  confirmedPestId    String?         @db.Uuid
+  confirmedById      String?         @db.Uuid
+  confirmedAt        DateTime?       @db.Timestamptz(6)
+  expertNotes        String?
+  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @db.Timestamptz(6)
+
+  requestedBy      User             @relation("DiagnosisRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  farmCrop         FarmCrop?        @relation(fields: [farmCropId], references: [id], onDelete: SetNull)
+  crop             Crop?            @relation(fields: [cropId], references: [id], onDelete: SetNull)
+  observation      CropObservation? @relation(fields: [observationId], references: [id], onDelete: SetNull)
+  confirmedDisease CropDisease?     @relation(fields: [confirmedDiseaseId], references: [id], onDelete: SetNull)
+  confirmedPest    CropPest?        @relation(fields: [confirmedPestId], references: [id], onDelete: SetNull)
+  confirmedBy      User?            @relation("DiagnosisConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  files         CropDiagnosisFile[]
+  aiCandidates  DiagnosisAiCandidate[]
+  consultations ExpertConsultation[]
+
+  @@index([requestedById, createdAt])
+  @@index([status])
+  @@index([farmCropId])
+}
+
+model CropDiagnosisFile {
+  diagnosisId String @db.Uuid
+  fileId      String @db.Uuid
+  sequence    Int    @default(0) @db.SmallInt
+
+  diagnosis CropDiagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  file      UserFile      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([diagnosisId, fileId])
+  @@index([fileId])
+}
+
+/// AI model output: ranked candidates with confidence. Advisory only.
+model DiagnosisAiCandidate {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  diagnosisId  String   @db.Uuid
+  modelName    String   @db.VarChar(100)
+  modelVersion String   @db.VarChar(50)
+  rank         Int      @db.SmallInt
+  diseaseId    String?  @db.Uuid
+  pestId       String?  @db.Uuid
+  /// Raw model label when it does not map to a known disease/pest.
+  labelText    String?  @db.VarChar(200)
+  /// 0–1.
+  confidence   Decimal  @db.Decimal(5, 4)
+  rawOutput    Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  diagnosis CropDiagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Cascade)
+  disease   CropDisease?  @relation(fields: [diseaseId], references: [id], onDelete: SetNull)
+  pest      CropPest?     @relation(fields: [pestId], references: [id], onDelete: SetNull)
+
+  @@unique([diagnosisId, modelName, modelVersion, rank])
+  @@index([diseaseId])
+  @@index([pestId])
+}

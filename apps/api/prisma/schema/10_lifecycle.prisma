@@ -1,0 +1,183 @@
+// MODULE 9 — Farmer crop lifecycle
+//
+// FarmCrop pins the exact ProcedureVersion the farmer started with. Tasks are COPIES generated from
+// that version's stages/instructions: farmers can complete, postpone, skip or rename their tasks
+// without touching the standard (immutable) instructions.
+
+model FarmCrop {
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  farmPlotId           String            @db.Uuid
+  cropId               String            @db.Uuid
+  cropVarietyId        String?           @db.Uuid
+  growingProcedureId   String?           @db.Uuid
+  procedureVersionId   String?           @db.Uuid
+  seasonId             String?           @db.Uuid
+  recommendationItemId String?           @db.Uuid
+  /// Farmer's own label, e.g. "Kharif paddy – east field".
+  label                String?           @db.VarChar(150)
+  plantingDate         DateTime?         @db.Date
+  expectedHarvestDate  DateTime?         @db.Date
+  actualHarvestDate    DateTime?         @db.Date
+  cultivatedArea       Decimal           @db.Decimal(12, 4)
+  areaUnitId           String            @db.Uuid
+  status               CultivationStatus @default(PLANNED)
+  notes                String?
+  createdAt            DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt            DateTime?         @db.Timestamptz(6)
+
+  farmPlot           FarmPlot                @relation(fields: [farmPlotId], references: [id], onDelete: Cascade)
+  crop               Crop                    @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  /// Composite FKs keep crop, variety, procedure and version consistent with each other.
+  cropVariety        CropVariety?            @relation(fields: [cropVarietyId, cropId], references: [id, cropId], onDelete: Restrict)
+  growingProcedure   GrowingProcedure?       @relation(fields: [growingProcedureId, cropId], references: [id, cropId], onDelete: Restrict)
+  procedureVersion   ProcedureVersion?       @relation(fields: [procedureVersionId, growingProcedureId], references: [id, procedureId], onDelete: Restrict)
+  season             Season?                 @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  recommendationItem CropRecommendationItem? @relation(fields: [recommendationItemId], references: [id], onDelete: SetNull)
+  areaUnit           MeasurementUnit         @relation(fields: [areaUnitId], references: [id], onDelete: Restrict)
+
+  tasks         CropTask[]
+  activityLogs  CropActivityLog[]
+  observations  CropObservation[]
+  expenses      CropExpense[]
+  harvests      HarvestRecord[]
+  diagnoses     CropDiagnosis[]
+  consultations ExpertConsultation[]
+  notifications Notification[]
+
+  @@index([farmPlotId, status])
+  @@index([cropId])
+  @@index([procedureVersionId])
+}
+
+model CropTask {
+  id                 String     @id @default(uuid(7)) @db.Uuid
+  farmCropId         String     @db.Uuid
+  /// Where the task came from (null for tasks the farmer added).
+  growingStageId     String?    @db.Uuid
+  stageInstructionId String?    @db.Uuid
+  title              String     @db.VarChar(200)
+  description        String?
+  sequence           Int        @default(0)
+  isCustom           Boolean    @default(false)
+  status             TaskStatus @default(PENDING)
+  scheduledStartDate DateTime?  @db.Date
+  dueDate            DateTime?  @db.Date
+  /// Original due date when a task was postponed.
+  postponedFromDate  DateTime?  @db.Date
+  completedAt        DateTime?  @db.Timestamptz(6)
+  skippedReason      String?
+  notes              String?
+  createdAt          DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @db.Timestamptz(6)
+
+  farmCrop         FarmCrop          @relation(fields: [farmCropId], references: [id], onDelete: Cascade)
+  growingStage     GrowingStage?     @relation(fields: [growingStageId], references: [id], onDelete: Restrict)
+  stageInstruction StageInstruction? @relation(fields: [stageInstructionId], references: [id], onDelete: Restrict)
+
+  reminders     TaskReminder[]
+  activityLogs  CropActivityLog[]
+  notifications Notification[]
+
+  @@index([farmCropId, status])
+  @@index([farmCropId, dueDate])
+  @@index([growingStageId])
+  @@index([stageInstructionId])
+}
+
+model TaskReminder {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  taskId        String              @db.Uuid
+  remindAt      DateTime            @db.Timestamptz(6)
+  channel       NotificationChannel @default(PUSH)
+  status        ReminderStatus      @default(SCHEDULED)
+  sentAt        DateTime?           @db.Timestamptz(6)
+  failureReason String?
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(6)
+
+  task CropTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([status, remindAt])
+  @@index([taskId])
+}
+
+/// Timeline of what the farmer actually did. Irrigation and input applications add a 1-to-1 detail
+/// row (IrrigationLog / InputApplicationLog) instead of duplicating the timeline.
+model CropActivityLog {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  farmCropId    String       @db.Uuid
+  taskId        String?      @db.Uuid
+  activityType  ActivityType
+  activityDate  DateTime     @db.Date
+  title         String?      @db.VarChar(200)
+  description   String?
+  performedById String?      @db.Uuid
+  labourCount   Int?         @db.SmallInt
+  labourHours   Decimal?     @db.Decimal(6, 2)
+  createdAt     DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(6)
+  deletedAt     DateTime?    @db.Timestamptz(6)
+
+  farmCrop    FarmCrop  @relation(fields: [farmCropId], references: [id], onDelete: Cascade)
+  task        CropTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  performedBy User?     @relation(fields: [performedById], references: [id], onDelete: SetNull)
+
+  irrigationLog    IrrigationLog?
+  inputApplication InputApplicationLog?
+  expenses         CropExpense[]
+
+  @@index([farmCropId, activityDate])
+  @@index([taskId])
+}
+
+model CropObservation {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  farmCropId      String          @db.Uuid
+  growingStageId  String?         @db.Uuid
+  observedAt      DateTime        @db.Timestamptz(6)
+  observationType ObservationType
+  severity        Severity?
+  affectedAreaPct Decimal?        @db.Decimal(5, 2)
+  notes           String?
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(6)
+
+  farmCrop     FarmCrop      @relation(fields: [farmCropId], references: [id], onDelete: Cascade)
+  growingStage GrowingStage? @relation(fields: [growingStageId], references: [id], onDelete: Restrict)
+
+  files     CropObservationFile[]
+  diagnoses CropDiagnosis[]
+
+  @@index([farmCropId, observedAt])
+}
+
+model CropObservationFile {
+  observationId String @db.Uuid
+  fileId        String @db.Uuid
+  sequence      Int    @default(0) @db.SmallInt
+
+  observation CropObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+  file        UserFile        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@id([observationId, fileId])
+  @@index([fileId])
+}
+
+model IrrigationLog {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  activityLogId   String            @unique @db.Uuid
+  waterSourceId   String?           @db.Uuid
+  method          IrrigationMethod?
+  durationMinutes Int?
+  waterQuantity   Decimal?          @db.Decimal(12, 3)
+  waterUnitId     String?           @db.Uuid
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(6)
+
+  activityLog CropActivityLog  @relation(fields: [activityLogId], references: [id], onDelete: Cascade)
+  waterSource WaterSource?     @relation(fields: [waterSourceId], references: [id], onDelete: SetNull)
+  waterUnit   MeasurementUnit? @relation(fields: [waterUnitId], references: [id], onDelete: Restrict)
+
+  @@index([waterSourceId])
+}

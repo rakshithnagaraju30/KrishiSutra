@@ -1,0 +1,162 @@
+// MODULE 7 — Farm management (farmer-owned data)
+//
+// Ownership chain: User → Farm → FarmPlot → (SoilTest, FarmCrop, ...). Every farmer record can be
+// traced to exactly one owner, which the API uses for ownership checks.
+
+model Farm {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  ownerId         String    @db.Uuid
+  name            String    @db.VarChar(150)
+  /// Most specific known Region (village / sub-district / district). Text fields below keep what the
+  /// farmer typed, so a farm can be saved even when the village is not yet in the Region table.
+  regionId        String?   @db.Uuid
+  state           String?   @db.VarChar(100)
+  district        String?   @db.VarChar(100)
+  taluk           String?   @db.VarChar(100)
+  village         String?   @db.VarChar(150)
+  addressLine     String?   @db.VarChar(300)
+  pincode         String?   @db.VarChar(10)
+  latitude        Decimal?  @db.Decimal(9, 6)
+  longitude       Decimal?  @db.Decimal(9, 6)
+  totalArea       Decimal?  @db.Decimal(12, 4)
+  totalAreaUnitId String?   @db.Uuid
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime? @db.Timestamptz(6)
+
+  owner         User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  region        Region?          @relation(fields: [regionId], references: [id], onDelete: SetNull)
+  totalAreaUnit MeasurementUnit? @relation(fields: [totalAreaUnitId], references: [id], onDelete: Restrict)
+
+  plots          FarmPlot[]
+  waterSources   WaterSource[]
+  inputPurchases InputPurchase[]
+
+  @@index([ownerId])
+  @@index([regionId])
+}
+
+model FarmPlot {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  farmId           String            @db.Uuid
+  name             String            @db.VarChar(150)
+  /// Land record survey number (RTC), if the farmer provides it.
+  surveyNumber     String?           @db.VarChar(50)
+  area             Decimal           @db.Decimal(12, 4)
+  areaUnitId       String            @db.Uuid
+  soilTypeId       String?           @db.Uuid
+  irrigationMethod IrrigationMethod?
+  landTenure       LandTenure?
+  latitude         Decimal?          @db.Decimal(9, 6)
+  longitude        Decimal?          @db.Decimal(9, 6)
+  notes            String?
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt        DateTime?         @db.Timestamptz(6)
+
+  farm     Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  areaUnit MeasurementUnit @relation(fields: [areaUnitId], references: [id], onDelete: Restrict)
+  soilType SoilType?       @relation(fields: [soilTypeId], references: [id], onDelete: Restrict)
+
+  soilTests       SoilTest[]
+  waterSources    PlotWaterSource[]
+  farmCrops       FarmCrop[]
+  recommendations CropRecommendation[]
+
+  /// Target of PlotWaterSource's composite FK (guarantees plot and water source share a farm).
+  @@unique([id, farmId])
+  @@index([farmId])
+  @@index([soilTypeId])
+}
+
+/// A water source on a farm (a borewell can serve several plots → PlotWaterSource).
+model WaterSource {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  farmId            String            @db.Uuid
+  waterSourceTypeId String            @db.Uuid
+  name              String?           @db.VarChar(150)
+  availability      WaterAvailability @default(UNKNOWN)
+  /// Months (1–12) when water is usually available, if the farmer knows.
+  availableMonths   Int[]             @db.SmallInt
+  estimatedYield    Decimal?          @db.Decimal(12, 3)
+  yieldUnitId       String?           @db.Uuid
+  depthMetres       Decimal?          @db.Decimal(8, 2)
+  isShared          Boolean           @default(false)
+  notes             String?
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(6)
+  deletedAt         DateTime?         @db.Timestamptz(6)
+
+  farm            Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  waterSourceType WaterSourceType  @relation(fields: [waterSourceTypeId], references: [id], onDelete: Restrict)
+  yieldUnit       MeasurementUnit? @relation(fields: [yieldUnitId], references: [id], onDelete: Restrict)
+
+  plots          PlotWaterSource[]
+  irrigationLogs IrrigationLog[]
+
+  @@unique([id, farmId])
+  @@index([farmId])
+  @@index([waterSourceTypeId])
+}
+
+model PlotWaterSource {
+  plotId        String   @db.Uuid
+  waterSourceId String   @db.Uuid
+  farmId        String   @db.Uuid
+  isPrimary     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  plot        FarmPlot    @relation(fields: [plotId, farmId], references: [id, farmId], onDelete: Cascade)
+  waterSource WaterSource @relation(fields: [waterSourceId, farmId], references: [id, farmId], onDelete: Cascade)
+
+  @@id([plotId, waterSourceId])
+  @@index([waterSourceId])
+}
+
+/// Historical soil tests for a plot (keep every test; never overwrite).
+model SoilTest {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  plotId          String         @db.Uuid
+  testDate        DateTime       @db.Date
+  source          SoilTestSource @default(OTHER)
+  laboratoryName  String?        @db.VarChar(200)
+  laboratoryCode  String?        @db.VarChar(50)
+  sampleId        String?        @db.VarChar(100)
+  reportNumber    String?        @db.VarChar(100)
+  reportFileId    String?        @db.Uuid
+  /// True once the farmer has confirmed values (e.g. after extraction from a photo of the report).
+  isUserConfirmed Boolean        @default(false)
+  notes           String?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(6)
+  deletedAt       DateTime?      @db.Timestamptz(6)
+
+  plot       FarmPlot  @relation(fields: [plotId], references: [id], onDelete: Cascade)
+  reportFile UserFile? @relation(fields: [reportFileId], references: [id], onDelete: SetNull)
+
+  results         SoilTestResult[]
+  recommendations CropRecommendation[]
+
+  @@index([plotId, testDate])
+}
+
+/// One measured parameter of a soil test. Reports differ in what they contain, so parameters are
+/// rows (only what the report has), not fixed columns.
+model SoilTestResult {
+  id          String            @id @default(uuid(7)) @db.Uuid
+  soilTestId  String            @db.Uuid
+  parameterId String            @db.Uuid
+  value       Decimal           @db.Decimal(12, 4)
+  unitId      String            @db.Uuid
+  /// Rating as printed on the report (e.g. "Low"), if any.
+  rating      QualitativeLevel?
+  method      String?           @db.VarChar(100)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+
+  soilTest  SoilTest           @relation(fields: [soilTestId], references: [id], onDelete: Cascade)
+  parameter AgronomicParameter @relation(fields: [parameterId], references: [id], onDelete: Restrict)
+  unit      MeasurementUnit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@unique([soilTestId, parameterId])
+  @@index([parameterId])
+}
