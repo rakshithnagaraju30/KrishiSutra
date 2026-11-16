@@ -53,7 +53,7 @@ or `https://krishisutra-api-xxxx.onrender.com`).
 ## Step 4 — Connect the Android app
 
 The app uses `https://krishisutra-api.onrender.com` by default. If Render gave a different address:
-- open the app → **Settings → Server address**, paste the address, tap **Save**; or
+- open the app → **Settings → Server address**, paste the address, tap **Test connection** (it is saved and checked); or
 - tell the developer, who rebuilds the APK with that address.
 
 ---

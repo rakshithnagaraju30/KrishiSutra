@@ -12,8 +12,9 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 | 1b. Clickable prototype (Android APK) | ✅ `apps/mobile` |
 | 2. Architecture & technology stack | ✅ Decided (assumptions to confirm) |
 | Part 2. Database architecture & Prisma models | ✅ Done |
-| Part 3.1 Backend foundation (Express + TypeScript) | ✅ Done — awaiting approval for Part 3.2 |
-| Part 3.2 Business APIs | ⏭ Next (after approval) |
+| Part 3.1 Backend foundation (Express + TypeScript) | ✅ Done |
+| Live data: business APIs, source-cited guides for 6 crops, connected Android app (v0.2.0) | ✅ Done — server must be deployed (Render + Neon) |
+| Expert review of content, phone OTP sign-in, content admin | ⏭ Next |
 
 ## Documents
 
@@ -22,6 +23,8 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 - [03 — Database Architecture](docs/database/03-database-architecture.md)
 - [04 — ER Diagrams](docs/database/04-er-diagrams.md)
 - [05 — Backend Foundation](docs/backend/05-backend-foundation.md)
+- [06 — Deploy: Render + Neon](docs/deployment/06-deploy-render-neon.md)
+- [07 — Live data: APIs, crop content, connected app](docs/backend/07-live-data-apis-and-content.md)
 - [Architecture Decision Records](docs/adr/README.md)
 - [UI reference — Grow Crops screens](docs/assets/ui-reference-grow-crops.png)
 

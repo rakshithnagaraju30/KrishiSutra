@@ -1,6 +1,6 @@
 # KrishiSutra — context for AI agents
 
-Read this first. It summarises everything built and decided so far (as of 2026-11-15), the rules to
+Read this first. It summarises everything built and decided so far (as of 2026-11-16), the rules to
 follow, and what comes next. Details live in `docs/`; this file tells you where.
 
 ---
@@ -39,7 +39,11 @@ regional languages, offline where possible.
 - Development branch: `claude/agriculture-platform-vision-7xftwo`. Don't push to other branches
   without permission. Don't open PRs unless asked.
 - The product owner wants to be **asked when in doubt** and to approve each part before the next.
-  **Part 3.1 (backend foundation) is done; Part 3.2 has NOT been approved yet** — do not start it without approval.
+  The product owner then asked for "real time data … through the Android app": business APIs, source-cited
+  content for the 6 crops and the connected app are **built (step 6 below)**; the server still has to be
+  deployed by the owner (Render + Neon). Ask before starting the next part.
+- **No chemical pesticide/herbicide/fungicide/fumigant names or doses in content** until an expert verifies
+  them (a test enforces this); show the KVK caution instead. Never disable TLS verification when fetching.
 
 ## 3. Decisions made (product owner)
 
@@ -52,6 +56,7 @@ regional languages, offline where possible.
 | D5 | No expert partners yet → content starts from public citable sources, labelled "Source-cited — pending expert review" |
 | D6 | Launch crops: **Paddy, Maize, Tomato, Chilli, Groundnut, Onion** |
 | Part 2 brief | Backend stack: **Node.js + Express.js, PostgreSQL, Prisma ORM, optional PostGIS, Cloudinary or S3-compatible storage**, UUID keys, Decimal for money/measurements |
+| Live data | Hosting **Render free + Neon free**; **no login yet (anonymous device accounts)**; AI drafts content from public sources (labelled pending expert review); scope = guides + weather + farm tracking + suggestions; sources fetched via GitHub Actions |
 
 Still open (defaults assumed, see `docs/architecture/02-technology-stack.md` §6): own vs partner
 videos, phone-OTP sign-in acceptable, business model, hosting provider/budget.
@@ -67,8 +72,8 @@ videos, phone-OTP sign-in acceptable, business model, hosting provider/budget.
 | Offline | Crop packs for knowledge; SQLite + outbox sync for farmer data (on device) | ADR 0005 |
 | Content admin | React + Refine, editorial workflow | ADR 0006 |
 | Recommendations | Deterministic, data-driven rule engine | ADR 0007 |
-| Hosting (assumed) | Google Cloud, Mumbai | ADR 0008 |
-| Sign-in (assumed) | Phone OTP via Firebase Auth; browsing without login | ADR 0009 |
+| Hosting (now) | Render free web service (`render.yaml`) + Neon PostgreSQL; Google Cloud Mumbai later | ADR 0008, doc 06 |
+| Sign-in (now) | Anonymous device token per phone; phone OTP via Firebase later | ADR 0009, doc 07 |
 | Media | Object storage + CDN; WebP; HLS + small offline MP4; YouTube embeds for partner video | ADR 0010 |
 | Languages/audio | i18n strings + DB translations; pre-produced reviewed audio | ADR 0011 |
 | External data | Adapters with caching (Open-Meteo, NASA POWER, IMD, AGMARKNET, LGD) | ADR 0012 |
@@ -91,7 +96,7 @@ All ADRs: `docs/adr/README.md`.
    - Android APK is built by GitHub Actions (`.github/workflows/android-apk.yml`) and published as a
      GitHub **pre-release**; it is signed with the debug key (prototype only). The product owner has
      no laptop and installs APKs on their phone from the chat/Releases page.
-4. **Part 2 — database** — `apps/api/` (complete, verified, awaiting approval):
+4. **Part 2 — database** — `apps/api/` (complete, verified):
    - 75 Prisma models in 14 files `apps/api/prisma/schema/NN_*.prisma` (users, reference data,
      categories, crops/varieties/requirements, versioned procedures, media & sources & reviews,
      translations, farms/plots/water/soil tests, recommendations + weather snapshots, crop lifecycle,
@@ -106,7 +111,7 @@ All ADRs: `docs/adr/README.md`.
      (`.github/workflows/api-database.yml`: fresh DB → migrate deploy → drift check → seed ×2 → tests).
    - Design doc: `docs/database/03-database-architecture.md`; ER diagrams generated from the live DB:
      `docs/database/04-er-diagrams.md` (+ `er-overview.png`); ADR 0013.
-5. **Part 3.1 — backend foundation** — inside `apps/api/` (complete, awaiting approval for 3.2):
+5. **Part 3.1 — backend foundation** — inside `apps/api/` (complete):
    - Express 5 + TypeScript: `src/app.ts` (app factory, dependencies injected), `src/server.ts`
      (validate env → `SELECT 1` → listen → graceful shutdown on SIGTERM/SIGINT; exits 1 if config is
      invalid or the DB is unreachable), layers `routes/ → controllers/ → services/ → db/`.
@@ -118,12 +123,27 @@ All ADRs: `docs/adr/README.md`.
    - 66 tests pass (30 new + 36 database). Production build: `npm run build` → `node dist/src/server.js`.
    - Doc: `docs/backend/05-backend-foundation.md`.
 
+6. **Live data** (doc `docs/backend/07-live-data-apis-and-content.md`):
+   - APIs in `apps/api/src`: device accounts (`POST /auth/device`, `requireAuth`), catalog (published only,
+     trust labels + sources, translations), weather (Open-Meteo adapter, snapshot cache), farms/plots/water/
+     soil tests, farm crops (pinned guide version → tasks), tasks/activities/expenses/harvests/sales,
+     recommendations (`src/recommendation/engine.ts`, rules `ks-rules-1.0`), express-rate-limit.
+   - Content: `apps/api/prisma/seed/content/*.ts` — rice, maize, tomato, chilli, groundnut, onion from TNAU
+     pages (URLs cited per instruction), loaded by `load.ts` (versioned publishing). Draft kn/hi titles.
+   - Deployment: `render.yaml` + `docs/deployment/06-deploy-render-neon.md` (owner must do the steps;
+     default app URL `https://krishisutra-api.onrender.com`).
+   - Source fetching: `.github/workflows/fetch-sources.yml` + `.github/scripts/fetch_sources.py`.
+   - App v0.2.0 (`apps/mobile`): `src/api/` (client, types, endpoints, `useApi` offline cache), screens for
+     Grow/crop/step, Home weather, `/farm`, `/start/[slug]`, `/plan/[id]` (server crop record), suggestions;
+     Settings → Server address. Old local AsyncStorage plans and `data/catalog.ts` were removed.
+   - 94 API tests pass; app typechecks; web export clicked through with Playwright against a local API.
+
 ## 6. Repository map
 
 ```
 AGENTS.md                      ← this file (CLAUDE.md imports it)
 README.md
-apps/mobile/                   Expo prototype (has its own AGENTS.md from the Expo template)
+apps/mobile/                   Expo app (src/api = API client + offline cache; has its own AGENTS.md from the Expo template)
 apps/api/                      Backend: Express API (src/app.ts, src/server.ts) + Prisma schema, migrations, seed, tests
   prisma.config.ts             Prisma 7 config (schema folder, migrations, seed, DATABASE_URL)
   prisma/schema/*.prisma       one file per module
@@ -131,10 +151,13 @@ apps/api/                      Backend: Express API (src/app.ts, src/server.ts) 
   prisma/seed/                 reference.ts, catalog.ts, index.ts
   src/db/prisma.ts             THE single Prisma Client — never create another
   src/db/ownership.ts          ownership filters for farmer data (use in every farmer query)
+  src/services/ src/routes/ src/controllers/ src/validators/ src/middleware/ src/integrations/ src/recommendation/
+  prisma/seed/content/         source-cited crop guides (one file per crop) + loader
   tests/                       helpers.ts, database.test.ts
   scripts/generate-er-diagrams.ts
-docs/requirements/ docs/architecture/ docs/database/ docs/adr/ docs/assets/
-.github/workflows/             android-apk.yml, api-database.yml
+docs/requirements/ docs/architecture/ docs/database/ docs/backend/ docs/deployment/ docs/adr/ docs/assets/
+render.yaml                    Render blueprint for the API
+.github/workflows/             android-apk.yml, api-database.yml, fetch-sources.yml
 ```
 
 ## 7. How to run
@@ -177,14 +200,18 @@ cd apps/mobile && npm ci && npx tsc --noEmit && npx expo start
   `sdkmanager "platforms;android-37"` failed). The repo is public, so release assets can be
   downloaded with plain `curl`.
 
-## 9. Next steps (only after the product owner approves)
+- **TNAU pages** sometimes serve an expired TLS certificate: the fetch workflow retries with verification on;
+  never add `verify=False` (an auto-mode safety check refused it). Open-Meteo is unreachable from the cloud
+  sandbox (test weather with a stub); it works on Render.
+- **Mobile web testing:** `EXPO_OFFLINE=1 CI=1 npx expo export --platform web`, serve the folder, set
+  localStorage `krishisutra.language` and `krishisutra.api.server`, run the API with
+  `CORS_ALLOWED_ORIGINS=http://localhost:8081`.
 
-**Part 3.2+ — business APIs:** add one module at a time under `apps/api/src` (`routes/` → `controllers/`
-→ `services/` → `repositories/` (create with the first module) + `validators/` zod schemas used by
-`middleware/validate.ts`); register sub-routers in `src/routes/index.ts`; throw `HttpError` for expected
-failures; auth (phone OTP per ADR 0009) + rate limiting; ownership checks via `src/db/ownership.ts`;
-transactions for multi-record writes; procedure publish/version workflow; task generation from pinned versions.
-Later: content admin app, recommendation rule engine, real verified content for the 6 launch crops,
-connecting the mobile prototype to the API, offline packs, reminders. Deferred database items are
-listed in `docs/database/03-database-architecture.md` §12 (PostGIS, LGD import, auth tables, audit log,
-media renditions, crop packs, market prices, RLS, search).
+## 9. Next steps (ask the product owner first)
+
+1. Owner deploys Neon + Render (doc 06) and installs APK v0.2.0; fix anything found.
+2. Expert review of the 6 guides; add Karnataka (UAS) doses, varieties and harvest gaps; mark VERIFIED.
+3. Phone OTP sign-in (ADR 0009) with migration of device accounts; account recovery.
+4. Translate instruction text (kn/hi) with native-speaker review; audio.
+5. Content admin app (ADR 0006), media (photos/videos), reminders/notifications, market prices,
+   soil-test entry screen in the app, offline crop packs. Deferred DB items: doc 03 §12.
