@@ -10,6 +10,21 @@ enum AccountStatus {
   DEACTIVATED
 }
 
+/// Why a one-time code was sent (Part 3.2).
+enum OtpPurpose {
+  REGISTRATION
+  LOGIN
+}
+
+/// Why a refresh-token session stopped being usable.
+enum SessionRevocationReason {
+  ROTATED
+  LOGOUT
+  REUSE_DETECTED
+  ACCOUNT_DISABLED
+  ADMIN
+}
+
 enum StorageProvider {
   S3
   CLOUDINARY

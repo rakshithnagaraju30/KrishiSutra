@@ -17,6 +17,7 @@ import { createErrorHandler } from './middleware/error-handler.ts';
 import { notFound } from './middleware/not-found.ts';
 import { createRateLimiters } from './middleware/rate-limit.ts';
 import { createRequestLogger } from './middleware/request-logger.ts';
+import { createSmsSender, type SmsSender } from './integrations/sms/index.ts';
 import { createV1Router } from './routes/index.ts';
 import { createServices } from './services/index.ts';
 
@@ -33,6 +34,8 @@ export type AppDependencies = {
   isShuttingDown?: () => boolean;
   /** HTTP client for external APIs; defaults to the global fetch. */
   fetchImpl?: typeof fetch;
+  /** OTP SMS sender. Defaults to the configured provider (development: console; production: none). Tests pass a mock. */
+  smsSender?: SmsSender | null;
 };
 
 export function createApp(deps: AppDependencies): Express {
@@ -54,9 +57,10 @@ export function createApp(deps: AppDependencies): Express {
     checkDatabase: deps.checkDatabase ?? createDatabaseCheck(deps.prisma),
     isShuttingDown: deps.isShuttingDown ?? (() => false),
     fetchImpl: deps.fetchImpl ?? fetch,
+    smsSender: deps.smsSender !== undefined ? deps.smsSender : createSmsSender(config, logger),
   });
   const limiters = createRateLimiters(config.rateLimit);
-  app.use(API_PREFIX, createV1Router({ config, services, limiters }));
+  app.use(API_PREFIX, createV1Router({ config, prisma: deps.prisma, services, limiters }));
 
   app.use(notFound);
   app.use(createErrorHandler({ exposeStack: config.nodeEnv === 'development' }));

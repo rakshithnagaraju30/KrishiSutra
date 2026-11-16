@@ -41,7 +41,8 @@ regional languages, offline where possible.
 - The product owner wants to be **asked when in doubt** and to approve each part before the next.
   The product owner then asked for "real time data … through the Android app": business APIs, source-cited
   content for the 6 crops and the connected app are **built (step 6 below)** and the owner has **deployed
-  the server on Render + Neon (working, 2026-11-16)** and uses APK v0.2.0. Ask before starting the next part.
+  the server on Render + Neon (working, 2026-11-16)** and uses APK v0.2.0.
+  **Part 3.2 (authentication & user management) is done; Part 3.3 has NOT been approved yet** — wait for approval.
 - **No chemical pesticide/herbicide/fungicide/fumigant names or doses in content** until an expert verifies
   them (a test enforces this); show the KVK caution instead. Never disable TLS verification when fetching.
 
@@ -56,6 +57,7 @@ regional languages, offline where possible.
 | D5 | No expert partners yet → content starts from public citable sources, labelled "Source-cited — pending expert review" |
 | D6 | Launch crops: **Paddy, Maize, Tomato, Chilli, Groundnut, Onion** |
 | Part 2 brief | Backend stack: **Node.js + Express.js, PostgreSQL, Prisma ORM, optional PostGIS, Cloudinary or S3-compatible storage**, UUID keys, Decimal for money/measurements |
+| Part 3.2 | Phone OTP + JWT built in our API (ADR 0014, supersedes Firebase ADR 0009); **2 new tables approved** (PhoneOtp, AuthSession); device accounts **upgraded in place** on registration (data kept, device tokens still valid); **reuse the 4 roles** (CONTENT_EDITOR = content manager, AGRI_EXPERT = reviewer/expert); **SMS provider: decide later** (prod phone sign-in = 503 until then) |
 | Live data | Hosting **Render free + Neon free**; **no login yet (anonymous device accounts)**; AI drafts content from public sources (labelled pending expert review); scope = guides + weather + farm tracking + suggestions; sources fetched via GitHub Actions |
 
 Still open (defaults assumed, see `docs/architecture/02-technology-stack.md` §6): own vs partner
@@ -73,7 +75,7 @@ videos, phone-OTP sign-in acceptable, business model, hosting provider/budget.
 | Content admin | React + Refine, editorial workflow | ADR 0006 |
 | Recommendations | Deterministic, data-driven rule engine | ADR 0007 |
 | Hosting (now) | Render free web service (`render.yaml`) + Neon PostgreSQL; Google Cloud Mumbai later | ADR 0008, doc 06 |
-| Sign-in (now) | Anonymous device token per phone; phone OTP via Firebase later | ADR 0009, doc 07 |
+| Sign-in (now) | Phone OTP (own, HMAC-hashed) + JWT access (15 min, `jose`) + rotating refresh tokens; anonymous device tokens still accepted | ADR 0014, doc 08 |
 | Media | Object storage + CDN; WebP; HLS + small offline MP4; YouTube embeds for partner video | ADR 0010 |
 | Languages/audio | i18n strings + DB translations; pre-produced reviewed audio | ADR 0011 |
 | External data | Adapters with caching (Open-Meteo, NASA POWER, IMD, AGMARKNET, LGD) | ADR 0012 |
@@ -137,6 +139,15 @@ All ADRs: `docs/adr/README.md`.
      Grow/crop/step, Home weather, `/farm`, `/start/[slug]`, `/plan/[id]` (server crop record), suggestions;
      Settings → Server address. Old local AsyncStorage plans and `data/catalog.ts` were removed.
    - 94 API tests pass; app typechecks; web export clicked through with Playwright against a local API.
+
+7. **Part 3.2 — authentication & user management** (doc `docs/backend/08-authentication.md`, ADR 0014):
+   - Migration `*_auth_otp_sessions`: `PhoneOtp` (HMAC'd codes, attempts, single use, decoys) and
+     `AuthSession` (hashed refresh tokens, rotation families, revocation reasons) + CHECKs.
+   - Endpoints: `/auth/register`, `/auth/send-otp`, `/auth/verify-otp`, `/auth/login`, `/auth/refresh`,
+     `/auth/logout`, `GET/PATCH /users/me`, admin role management `/admin/users…`.
+   - `middleware/auth.ts`: `requireAuth` (JWT or device token; status + roles loaded from DB each request),
+     `requireRole(...)`. SMS via `src/integrations/sms` (`console` dev-only, `none`; tests inject a mock).
+   - First admin: `npm run user:grant-role -- <mobile> ADMIN`. 115 API tests pass (21 new auth tests).
 
 ## 6. Repository map
 
@@ -203,6 +214,8 @@ cd apps/mobile && npm ci && npx tsc --noEmit && npx expo start
 - **TNAU pages** sometimes serve an expired TLS certificate: the fetch workflow retries with verification on;
   never add `verify=False` (an auto-mode safety check refused it). Open-Meteo is unreachable from the cloud
   sandbox (test weather with a stub); it works on Render.
+- **Auth tests:** each test app must raise `OTP_REQUESTS_PER_HOUR` (all supertest calls share one IP) and
+  set `OTP_RESEND_COOLDOWN_SECONDS=0`; inject `smsSender` (mock) — the console sender only runs in development.
 - **Render + Neon:** seed before `listen` caused Render's port-scan timeout — start the server first and
   seed in the background (`apps/api/scripts/start.sh`); the startup DB check retries (Neon sleeps, far regions
   are slow). This sandbox cannot reach `*.onrender.com`; ask the owner for log screenshots.
@@ -216,7 +229,8 @@ cd apps/mobile && npm ci && npx tsc --noEmit && npx expo start
    `sh scripts/start.sh` (Blueprint edits to `render.yaml` did not sync automatically). The owner's first Neon
    project was in US East (Virginia); recommend a Singapore project for speed (region can't be changed).
 2. Expert review of the 6 guides; add Karnataka (UAS) doses, varieties and harvest gaps; mark VERIFIED.
-3. Phone OTP sign-in (ADR 0009) with migration of device accounts; account recovery.
+3. ✅ Part 3.2 done (backend). Still to do: choose + implement the production SMS provider (DLT), app
+   login screens (register/verify/login, token refresh), phone-number change flow, account deletion.
 4. Translate instruction text (kn/hi) with native-speaker review; audio.
 5. Content admin app (ADR 0006), media (photos/videos), reminders/notifications, market prices,
    soil-test entry screen in the app, offline crop packs. Deferred DB items: doc 03 §12.

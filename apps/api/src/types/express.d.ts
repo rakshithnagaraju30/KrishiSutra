@@ -1,10 +1,10 @@
 // Adds the authenticated identity to Express requests (set by middleware/auth.ts).
-export {};
+import type { AuthIdentity } from '../middleware/auth.ts';
 
 declare global {
   namespace Express {
     interface Request {
-      auth?: { userId: string; credentialId: string };
+      auth?: AuthIdentity;
     }
   }
 }

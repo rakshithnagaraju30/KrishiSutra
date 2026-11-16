@@ -11,8 +11,8 @@ services:
     rootDir: apps/api
     # Dev dependencies are needed to compile and to run migrations/seed (prisma, tsx, typescript).
     buildCommand: npm ci --include=dev && npm run build
-    # Apply migrations, load reference + published content (idempotent), then replace the shell with
-    # node so it receives SIGTERM directly (graceful shutdown).
+    # Applies migrations, starts the server at once and loads reference + published content in the
+    # background (idempotent). See apps/api/scripts/start.sh.
     startCommand: sh scripts/start.sh
     healthCheckPath: /api/v1/health
     autoDeploy: true
@@ -35,3 +35,11 @@ services:
         value: "300"
       - key: DEVICE_REGISTRATIONS_PER_HOUR
         value: "20"
+      # Phone sign-in (Part 3.2). Render generates random secrets. Phone sign-in stays disabled (503)
+      # until an SMS provider exists — SMS_PROVIDER=none; device accounts keep working.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: OTP_HASH_SECRET
+        generateValue: true
+      - key: SMS_PROVIDER
+        value: none

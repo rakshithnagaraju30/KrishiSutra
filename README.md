@@ -14,7 +14,8 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 | Part 2. Database architecture & Prisma models | ✅ Done |
 | Part 3.1 Backend foundation (Express + TypeScript) | ✅ Done |
 | Live data: business APIs, source-cited guides for 6 crops, connected Android app (v0.2.0) | ✅ Done — server must be deployed (Render + Neon) |
-| Expert review of content, phone OTP sign-in, content admin | ⏭ Next |
+| Part 3.2 Authentication & user management (phone OTP + JWT, roles, profiles) | ✅ Done — awaiting approval for Part 3.3 |
+| Expert review of content, production SMS provider, app login screens, content admin | ⏭ Next |
 
 ## Documents
 
@@ -25,12 +26,13 @@ A practical farming assistant that helps farmers and growers decide **what to gr
 - [05 — Backend Foundation](docs/backend/05-backend-foundation.md)
 - [06 — Deploy: Render + Neon](docs/deployment/06-deploy-render-neon.md)
 - [07 — Live data: APIs, crop content, connected app](docs/backend/07-live-data-apis-and-content.md)
+- [08 — Authentication & user management](docs/backend/08-authentication.md)
 - [Architecture Decision Records](docs/adr/README.md)
 - [UI reference — Grow Crops screens](docs/assets/ui-reference-grow-crops.png)
 
 ## Technology at a glance
 
-TypeScript · React Native + Expo (Android, iOS, web) · Node.js + Express API · PostgreSQL + Prisma ORM 7 · Refine admin app · Google Cloud (Mumbai) · Firebase phone OTP · rule-based recommendation engine.
+TypeScript · React Native + Expo (Android, iOS, web) · Node.js + Express API · PostgreSQL + Prisma ORM 7 · Refine admin app · Google Cloud (Mumbai) · phone OTP + JWT · rule-based recommendation engine.
 
 ## Repository layout
 

@@ -1,6 +1,6 @@
 # ADR 0009 — Sign-in: phone OTP via Firebase Authentication
 
-- **Status:** Accepted, based on assumption AS2 (phone OTP acceptable)
+- **Status:** Superseded by [ADR 0014](0014-own-phone-otp-and-jwt.md) (own OTP + JWT, Part 3.2). Originally accepted, based on assumption AS2 (phone OTP acceptable)
 - **Date:** 2026-11-15
 
 ## Context

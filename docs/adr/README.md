@@ -14,8 +14,9 @@ Each ADR records one significant decision: its context, the options considered, 
 | [0006](0006-content-admin-editorial-workflow.md) | Content admin app and editorial workflow | Accepted |
 | [0007](0007-rule-based-recommendation-engine.md) | Deterministic, data-driven recommendation engine | Accepted |
 | [0008](0008-hosting-google-cloud-india.md) | Hosting: Google Cloud, Mumbai region | Accepted (assumption AS1) |
-| [0009](0009-phone-otp-authentication.md) | Sign-in: phone OTP via Firebase Authentication | Accepted (assumption AS2) |
+| [0009](0009-phone-otp-authentication.md) | Sign-in: phone OTP via Firebase Authentication | Superseded by 0014 |
 | [0010](0010-media-pipeline.md) | Media storage, formats and delivery | Accepted (assumption AS3) |
 | [0011](0011-localisation-and-audio.md) | Localisation (kn/hi/en) and audio narration | Accepted (assumption AS4) |
 | [0012](0012-external-data-integrations.md) | External data integrations via adapters with caching | Accepted (assumption AS5) |
 | [0013](0013-express-and-prisma.md) | Backend: Express.js and Prisma ORM | Accepted |
+| [0014](0014-own-phone-otp-and-jwt.md) | Sign-in: own phone OTP + JWT sessions, pluggable SMS provider | Accepted |
