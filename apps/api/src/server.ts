@@ -31,15 +31,25 @@ async function main(): Promise<void> {
 
   // Imported only after configuration is valid (the module creates the client on import).
   const { prisma } = await import('./db/prisma.ts');
-  const checkDatabase = createDatabaseCheck(prisma);
+  // A hosted database (e.g. Neon) may be asleep or far away: allow time and a few attempts.
+  const checkTimeoutMs = Number(process.env.DATABASE_CHECK_TIMEOUT_MS ?? 10_000);
+  const startupAttempts = Math.max(1, Number(process.env.DATABASE_STARTUP_ATTEMPTS ?? 5));
+  const checkDatabase = createDatabaseCheck(prisma, checkTimeoutMs);
 
-  try {
-    const { latencyMs } = await checkDatabase();
-    logger.info({ latencyMs }, 'Database connection OK');
-  } catch (error) {
-    logger.fatal({ err: errorForLog(error) }, 'Cannot reach the database — the server will not start');
-    await prisma.$disconnect().catch(() => undefined);
-    process.exit(1);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const { latencyMs } = await checkDatabase();
+      logger.info({ latencyMs, attempt }, 'Database connection OK');
+      break;
+    } catch (error) {
+      if (attempt >= startupAttempts) {
+        logger.fatal({ err: errorForLog(error), attempts: attempt }, 'Cannot reach the database — the server will not start');
+        await prisma.$disconnect().catch(() => undefined);
+        process.exit(1);
+      }
+      logger.warn({ err: errorForLog(error), attempt }, 'Database not reachable yet — retrying');
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
   }
 
   let shuttingDown = false;

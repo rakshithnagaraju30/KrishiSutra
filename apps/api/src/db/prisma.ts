@@ -17,7 +17,7 @@ function createClient(): PrismaClient {
   const adapter = new PrismaPg({
     connectionString,
     // Without this, pg waits forever for a connection when the database is unreachable.
-    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 5000),
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS ?? 10_000),
   });
   return new PrismaClient({
     adapter,

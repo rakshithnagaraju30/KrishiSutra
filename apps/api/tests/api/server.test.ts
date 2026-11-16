@@ -70,6 +70,7 @@ describe('server process', () => {
       CORS_ALLOWED_ORIGINS: 'https://app.example',
       DATABASE_URL: 'postgresql://krishisutra:very_secret_pw@127.0.0.1:1/krishisutra',
       DATABASE_CONNECT_TIMEOUT_MS: '1000',
+      DATABASE_STARTUP_ATTEMPTS: '2',
     });
     assert.equal(await within(run.exited, 20_000, 'process exit'), 1);
     const fatal = await waitForLog(run, /Cannot reach the database/, 1000);
