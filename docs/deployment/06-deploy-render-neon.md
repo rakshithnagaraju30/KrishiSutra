@@ -18,7 +18,8 @@ Everything can be done **from a phone browser**. Total time: about 15 minutes. B
 2. Create a project:
    - **Project name:** `krishisutra`
    - **Postgres version:** 16
-   - **Region:** *Asia Pacific (Singapore)*
+   - **Region:** *Asia Pacific (Singapore)* — the same region as the Render server. A Neon project's
+     region cannot be changed later; a far region (e.g. US East / Virginia) makes every request slow.
 3. On the project dashboard, open **Connect** (or *Connection string*).
    - Turn **off** "Connection pooling" (use the *direct* connection — needed for database migrations).
    - Copy the string. It looks like
@@ -72,6 +73,9 @@ on every start and are safe to repeat.
 | Deploy log: `Cannot reach the database` | Re-copy the Neon string (direct connection, `sslmode=require`). |
 | First app request is slow | The free server was asleep; it wakes in about 50 s. |
 | `P1001` during migrations | Neon project paused or wrong host — open the Neon console once and retry the deploy. |
+| Render log shows the old start command (`npx prisma migrate deploy && npx prisma db seed && …`) | Render → service → **Settings → Start Command** = `sh scripts/start.sh` → Save → **Manual Deploy → Deploy latest commit**. |
+| `Port scan timeout reached, no open ports detected` | Same fix as above: the start script opens the port first and seeds in the background. |
+| `Database did not respond within … ms` | Neon was asleep or far away; the server now retries 5 × 10 s (`DATABASE_CHECK_TIMEOUT_MS`, `DATABASE_STARTUP_ATTEMPTS`). Prefer a Singapore Neon project. |
 
 ## Security notes
 

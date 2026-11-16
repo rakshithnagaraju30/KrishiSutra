@@ -40,8 +40,8 @@ regional languages, offline where possible.
   without permission. Don't open PRs unless asked.
 - The product owner wants to be **asked when in doubt** and to approve each part before the next.
   The product owner then asked for "real time data … through the Android app": business APIs, source-cited
-  content for the 6 crops and the connected app are **built (step 6 below)**; the server still has to be
-  deployed by the owner (Render + Neon). Ask before starting the next part.
+  content for the 6 crops and the connected app are **built (step 6 below)** and the owner has **deployed
+  the server on Render + Neon (working, 2026-11-16)** and uses APK v0.2.0. Ask before starting the next part.
 - **No chemical pesticide/herbicide/fungicide/fumigant names or doses in content** until an expert verifies
   them (a test enforces this); show the KVK caution instead. Never disable TLS verification when fetching.
 
@@ -203,13 +203,18 @@ cd apps/mobile && npm ci && npx tsc --noEmit && npx expo start
 - **TNAU pages** sometimes serve an expired TLS certificate: the fetch workflow retries with verification on;
   never add `verify=False` (an auto-mode safety check refused it). Open-Meteo is unreachable from the cloud
   sandbox (test weather with a stub); it works on Render.
+- **Render + Neon:** seed before `listen` caused Render's port-scan timeout — start the server first and
+  seed in the background (`apps/api/scripts/start.sh`); the startup DB check retries (Neon sleeps, far regions
+  are slow). This sandbox cannot reach `*.onrender.com`; ask the owner for log screenshots.
 - **Mobile web testing:** `EXPO_OFFLINE=1 CI=1 npx expo export --platform web`, serve the folder, set
   localStorage `krishisutra.language` and `krishisutra.api.server`, run the API with
   `CORS_ALLOWED_ORIGINS=http://localhost:8081`.
 
 ## 9. Next steps (ask the product owner first)
 
-1. Owner deploys Neon + Render (doc 06) and installs APK v0.2.0; fix anything found.
+1. ✅ Done: owner deployed Neon + Render (doc 06) and confirmed the app works. Render start command must be
+   `sh scripts/start.sh` (Blueprint edits to `render.yaml` did not sync automatically). The owner's first Neon
+   project was in US East (Virginia); recommend a Singapore project for speed (region can't be changed).
 2. Expert review of the 6 guides; add Karnataka (UAS) doses, varieties and harvest gaps; mark VERIFIED.
 3. Phone OTP sign-in (ADR 0009) with migration of device accounts; account recovery.
 4. Translate instruction text (kn/hi) with native-speaker review; audio.
