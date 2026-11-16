@@ -89,10 +89,11 @@ jobs:
           prerelease: true
           files: apps/mobile/${{ steps.apk.outputs.name }}
           body: |
-            **Prototype build: not for real farming decisions.**
+            **Early version — connects to the KrishiSutra server.**
 
-            Clickable prototype of the KrishiSutra farmer app (Android).
-            Crop details are sample placeholders; verified content from agricultural universities, ICAR and KVKs will be added later.
+            Crop guides (6 launch crops) come from public Tamil Nadu Agricultural University pages and are marked "Source-cited · pending expert review". Confirm doses and timing with your local KVK.
+            Live weather (Open-Meteo), My farm, crop tracking (steps, expenses, harvest) and "What should I grow?" suggestions use the server; guides you have opened stay available offline.
+            The server address can be changed in Settings.
 
             **Install:** download the `.apk` below on an Android phone, open it, and allow "Install unknown apps" for your browser or file manager when asked.
 

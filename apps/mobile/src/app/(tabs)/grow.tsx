@@ -1,21 +1,47 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { catalog } from '../../api/endpoints';
+import { useApi } from '../../api/useApi';
 import { CropGrid } from '../../components/CropTile';
-import { Body, Heading, PrototypeBanner, Screen } from '../../components/ui';
-import { CATEGORIES, CROPS, cropsInCategory, searchCrops } from '../../data/catalog';
+import { Body, Heading, LoadState, PrototypeBanner, Screen } from '../../components/ui';
+import { categoryIcon } from '../../data/look';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { colors, font, radius, spacing, TOUCH } from '../../theme/theme';
 
+/** Simple on-phone search so it also works offline (names come in the chosen language). */
+function matches(name: string, q: string) {
+  return name.toLowerCase().includes(q.toLowerCase());
+}
+
 export default function GrowScreen() {
-  const { t, l } = useLanguage();
+  const { t, lang } = useLanguage();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<string>('all');
+  const [debounced, setDebounced] = useState('');
 
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(query.trim()), 400);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const tree = useApi(`categories:${lang}`, () => catalog.categories());
+  const all = useApi(`crops:${lang}`, () => catalog.crops());
+  // Server search also finds names in other languages; falls back to on-phone search.
+  const search = useApi(debounced ? `search:${lang}:${debounced}` : null, () => catalog.crops({ q: debounced }), { cache: false });
+
+  const roots = tree.data ?? [];
   const crops = useMemo(() => {
-    if (query.trim()) return searchCrops(query);
-    return filter === 'all' ? CROPS : cropsInCategory(filter);
-  }, [query, filter]);
+    const list = all.data ?? [];
+    if (query.trim()) {
+      if (search.data && debounced === query.trim()) return search.data;
+      return list.filter((c) => matches(c.name, query.trim()));
+    }
+    if (filter === 'all') return list;
+    const node = roots.find((r) => r.slug === filter);
+    const slugs = new Set([filter, ...(node?.children.map((c) => c.slug) ?? [])]);
+    return list.filter((c) => c.categories.some((cat) => slugs.has(cat.slug)));
+  }, [all.data, search.data, query, debounced, filter, roots]);
 
   return (
     <Screen>
@@ -29,41 +55,35 @@ export default function GrowScreen() {
         accessibilityLabel={t('searchPlaceholder')}
       />
 
-      {!query.trim() && (
+      <LoadState loading={all.loading} error={all.error} offline={all.offline} hasData={Boolean(all.data)} onRetry={() => { all.reload(); tree.reload(); }} />
+
+      {!query.trim() && roots.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           <Chip label={t('all')} active={filter === 'all'} onPress={() => setFilter('all')} />
-          {CATEGORIES.filter((c) => cropsInCategory(c.id).length > 0).map((c) => (
-            <Chip
-              key={c.id}
-              label={`${c.icon} ${l(c.name)}`}
-              active={filter === c.id}
-              onPress={() => setFilter(c.id)}
-            />
+          {roots.filter((c) => c.totalCropCount > 0).map((c) => (
+            <Chip key={c.slug} label={`${categoryIcon(c.slug)} ${c.name}`} active={filter === c.slug} onPress={() => setFilter(c.slug)} />
           ))}
         </ScrollView>
       )}
 
-      {crops.length ? <CropGrid crops={crops} /> : <Body muted>{t('noResults')}</Body>}
+      {all.data && (crops.length ? <CropGrid crops={crops} /> : <Body muted>{t('noResults')}</Body>)}
 
-      <Heading>{t('categories')}</Heading>
+      {roots.length > 0 && <Heading>{t('categories')}</Heading>}
       <View style={styles.categoryGrid}>
-        {CATEGORIES.map((c) => {
-          const count = cropsInCategory(c.id).length;
-          return (
-            <Pressable
-              key={c.id}
-              accessibilityRole="button"
-              onPress={() => router.push(`/category/${c.id}`)}
-              style={({ pressed }) => [styles.category, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.categoryIcon}>{c.icon}</Text>
-              <Text style={styles.categoryName} numberOfLines={2}>
-                {l(c.name)}
-              </Text>
-              <Text style={styles.categoryCount}>{count > 0 ? `${count}` : t('comingSoon')}</Text>
-            </Pressable>
-          );
-        })}
+        {roots.map((c) => (
+          <Pressable
+            key={c.slug}
+            accessibilityRole="button"
+            onPress={() => router.push(`/category/${c.slug}`)}
+            style={({ pressed }) => [styles.category, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.categoryIcon}>{categoryIcon(c.slug)}</Text>
+            <Text style={styles.categoryName} numberOfLines={2}>
+              {c.name}
+            </Text>
+            <Text style={styles.categoryCount}>{c.totalCropCount > 0 ? `${c.totalCropCount}` : t('comingSoon')}</Text>
+          </Pressable>
+        ))}
       </View>
       <PrototypeBanner />
     </Screen>

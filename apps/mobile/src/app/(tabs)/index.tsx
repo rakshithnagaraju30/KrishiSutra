@@ -1,19 +1,21 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PrototypeBanner, Screen, Title } from '../../components/ui';
+import { WeatherCard } from '../../components/WeatherCard';
 import { useLanguage } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/strings';
-import { usePlans } from '../../state/PlansContext';
+import { useMyFarm } from '../../state/useMyFarm';
 import { colors, font, radius, spacing } from '../../theme/theme';
 
 export default function HomeScreen() {
   const { t } = useLanguage();
-  const { plans } = usePlans();
+  const my = useMyFarm();
+  const farmCoords = my.farm && my.farm.latitude !== null && my.farm.longitude !== null ? { latitude: my.farm.latitude, longitude: my.farm.longitude } : null;
 
   return (
     <Screen>
       <Title>{t('homeGreeting')} 🙏</Title>
-      <PrototypeBanner />
+      <WeatherCard farmCoords={farmCoords} />
 
       <BigCard
         icon="🧭"
@@ -31,17 +33,24 @@ export default function HomeScreen() {
       />
       <BigCard
         icon="📋"
-        title={`${t('tabMyCrops')}${plans.length ? ` (${plans.length})` : ''}`}
+        title={t('tabMyCrops')}
         subtitle={t('homeMyCropsSub')}
         color="#E6EEF8"
         onPress={() => router.navigate('/my-crops')}
       />
+      <BigCard
+        icon="🏡"
+        title={my.farm ? my.farm.name : t('myFarm')}
+        subtitle={t('myFarmSub')}
+        color="#F3E6D3"
+        onPress={() => router.push('/farm')}
+      />
+      <PrototypeBanner />
 
       <Text style={styles.soonHeading}>{t('comingSoon')}</Text>
       <View style={styles.soonGrid}>
         {(
           [
-            ['⛅', 'featWeather'],
             ['🧪', 'featSoil'],
             ['₹', 'featMarket'],
             ['🎧', 'featExpert'],

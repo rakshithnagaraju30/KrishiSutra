@@ -1,24 +1,24 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Crop } from '../data/catalog';
-import { useLanguage } from '../i18n/LanguageContext';
+import type { CropSummary } from '../api/types';
+import { cropLook } from '../data/look';
 import { colors, font, radius, spacing } from '../theme/theme';
 
-export function CropTile({ crop }: { crop: Crop }) {
-  const { l } = useLanguage();
+export function CropTile({ crop }: { crop: CropSummary }) {
+  const look = cropLook(crop.slug);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={l(crop.name)}
-      onPress={() => router.push(`/crop/${crop.id}`)}
+      accessibilityLabel={crop.name}
+      onPress={() => router.push(`/crop/${crop.slug}`)}
       style={({ pressed }) => [styles.tile, pressed && { opacity: 0.85 }]}
     >
-      <View style={[styles.image, { backgroundColor: crop.color }]}>
-        <Text style={styles.emoji}>{crop.icon}</Text>
+      <View style={[styles.image, { backgroundColor: look.color }]}>
+        <Text style={styles.emoji}>{look.icon}</Text>
       </View>
       <View style={styles.labelRow}>
         <Text style={styles.label} numberOfLines={2}>
-          {l(crop.name)}
+          {crop.name}
         </Text>
         <Text style={styles.chevron}>›</Text>
       </View>
@@ -26,11 +26,11 @@ export function CropTile({ crop }: { crop: Crop }) {
   );
 }
 
-export function CropGrid({ crops }: { crops: Crop[] }) {
+export function CropGrid({ crops }: { crops: CropSummary[] }) {
   return (
     <View style={styles.grid}>
       {crops.map((c) => (
-        <View key={c.id} style={styles.cell}>
+        <View key={c.slug} style={styles.cell}>
           <CropTile crop={c} />
         </View>
       ))}

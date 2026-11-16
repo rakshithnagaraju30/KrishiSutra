@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { setApiLanguage } from '../api/client';
 import { strings, type StringKey } from './strings';
 import { LANGUAGES, type Lang, type LText } from './types';
 
@@ -47,6 +48,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<LanguageContextValue>(() => {
     const current: Lang = lang ?? 'en';
+    setApiLanguage(current);
     return {
       lang,
       ready,

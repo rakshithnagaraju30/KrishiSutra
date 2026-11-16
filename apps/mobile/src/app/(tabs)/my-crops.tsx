@@ -1,18 +1,35 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Body, Button, Card, ProgressBar, Screen } from '../../components/ui';
-import { getCrop } from '../../data/catalog';
+import { farmCrops } from '../../api/endpoints';
+import { useApi } from '../../api/useApi';
+import { Body, Button, Card, LoadState, ProgressBar, Screen } from '../../components/ui';
+import { cropLook } from '../../data/look';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { usePlans } from '../../state/PlansContext';
 import { colors, font, radius, spacing } from '../../theme/theme';
 
 export default function MyCropsScreen() {
-  const { t, l } = useLanguage();
-  const { plans } = usePlans();
+  const { t, lang } = useLanguage();
+  const list = useApi(`farmcrops:${lang}`, () => farmCrops.list());
+  const first = useRef(true);
 
-  if (!plans.length) {
-    return (
-      <Screen>
+  // Refresh when coming back from a crop record (tasks ticked, crop removed…).
+  useFocusEffect(
+    useCallback(() => {
+      if (first.current) first.current = false;
+      else list.reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  return (
+    <Screen>
+      <View style={{ flexDirection: 'row' }}>
+        <Button variant="secondary" icon="🏡" label={t('myFarm')} onPress={() => router.push('/farm')} />
+      </View>
+      <LoadState loading={list.loading} error={list.error} offline={list.offline} hasData={Boolean(list.data)} onRetry={list.reload} />
+
+      {list.data && list.data.length === 0 && (
         <Card style={{ alignItems: 'center', paddingVertical: spacing.xl }}>
           <Text style={{ fontSize: 56 }}>🌱</Text>
           <Body muted>{t('myCropsEmpty')}</Body>
@@ -20,34 +37,28 @@ export default function MyCropsScreen() {
             <Button label={t('goToGrow')} onPress={() => router.navigate('/grow')} />
           </View>
         </Card>
-      </Screen>
-    );
-  }
+      )}
 
-  return (
-    <Screen>
-      {plans.map((plan) => {
-        const crop = getCrop(plan.cropId);
-        if (!crop) return null;
-        const total = crop.stages.length;
-        const done = plan.doneStages.length;
+      {list.data?.map((fc) => {
+        const look = cropLook(fc.crop.slug);
         return (
           <Pressable
-            key={plan.id}
+            key={fc.id}
             accessibilityRole="button"
-            onPress={() => router.push(`/plan/${plan.id}`)}
+            onPress={() => router.push(`/plan/${fc.id}`)}
             style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
           >
-            <View style={[styles.icon, { backgroundColor: crop.color }]}>
-              <Text style={{ fontSize: 36 }}>{crop.icon}</Text>
+            <View style={[styles.icon, { backgroundColor: look.color }]}>
+              <Text style={{ fontSize: 36 }}>{look.icon}</Text>
             </View>
             <View style={{ flex: 1, gap: 6 }}>
-              <Text style={styles.name}>{l(crop.name)}</Text>
+              <Text style={styles.name}>{fc.crop.name}</Text>
               <Text style={styles.meta}>
-                {t('sowingDate')}: {plan.sowingDate}
+                {fc.plot.name} · {t('sowingDate')}: {fc.plantingDate ?? '—'}
               </Text>
-              <ProgressBar value={done / total} />
-              <Text style={styles.meta}>{t('stepsDone', { x: done, y: total })}</Text>
+              <ProgressBar value={fc.tasks.total ? fc.tasks.done / fc.tasks.total : 0} />
+              <Text style={styles.meta}>{t('stepsDone', { x: fc.tasks.done, y: fc.tasks.total })}</Text>
+              {fc.tasks.overdue > 0 && <Text style={[styles.meta, { color: colors.danger, fontWeight: '700' }]}>⏰ {t('overdue')}: {fc.tasks.overdue}</Text>}
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>

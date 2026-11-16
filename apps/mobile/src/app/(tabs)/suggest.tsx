@@ -1,21 +1,28 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Badge, Body, Button, Card, Heading, ProgressBar, PrototypeBanner, Screen } from '../../components/ui';
-import { CROPS, getCategory } from '../../data/catalog';
-import { SEASONS, SOIL_TEST_FIELDS, SOIL_TYPES, WATER_SOURCES, type Option } from '../../data/farmInputs';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { recommendations } from '../../api/endpoints';
+import type { Recommendation } from '../../api/types';
+import { OptionGrid } from '../../components/OptionGrid';
+import { Body, Button, Card, ChoiceRow, Field, Heading, ProgressBar, PrototypeBanner, Screen, SourceLine } from '../../components/ui';
+import { SEASONS, SOIL_TEST_FIELDS, SOIL_TYPES, WATER_SOURCES } from '../../data/farmInputs';
+import { cropLook } from '../../data/look';
 import { useLanguage } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/strings';
-import { colors, font, radius, spacing, TOUCH } from '../../theme/theme';
+import { useMyFarm } from '../../state/useMyFarm';
+import { colors, font, radius, spacing } from '../../theme/theme';
 
 type Answers = {
   village: string;
   district: string;
   soil: string | null;
   water: string[];
+  availability: 'PERENNIAL' | 'SEASONAL' | 'UNKNOWN';
   soilTest: Record<string, string>;
   season: string | null;
   budget: string;
+  areaAcres: string;
+  plotId: string | null;
 };
 
 const EMPTY: Answers = {
@@ -23,9 +30,12 @@ const EMPTY: Answers = {
   district: '',
   soil: null,
   water: [],
+  availability: 'UNKNOWN',
   soilTest: {},
   season: null,
   budget: '',
+  areaAcres: '',
+  plotId: null,
 };
 
 const STEPS = ['location', 'soil', 'water', 'soilTest', 'season', 'budget'] as const;
@@ -33,6 +43,7 @@ type Step = (typeof STEPS)[number];
 
 export default function SuggestScreen() {
   const { t } = useLanguage();
+  const my = useMyFarm();
   const [answers, setAnswers] = useState<Answers>(EMPTY);
   const [step, setStep] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -77,10 +88,32 @@ export default function SuggestScreen() {
       {current === 'location' && (
         <>
           <Text style={styles.question}>📍 {t('qLocation')}</Text>
+          {my.farm && my.farm.plots[0] && (
+            <ChoiceRow
+              options={my.farm.plots.map((p) => ({ id: p.id, label: `🏡 ${t('useMyFarm')}: ${p.name}` }))}
+              value={answers.plotId}
+              onChange={(id) => {
+                const plot = my.farm!.plots.find((p) => p.id === id);
+                setAnswers((a) => ({
+                  ...a,
+                  plotId: a.plotId === id ? null : id,
+                  soil: plot?.soilType ?? a.soil,
+                  water: a.water.length ? a.water : my.farm!.waterSources.map((w) => w.type),
+                  availability: (my.farm!.waterSources.find((w) => w.availability === 'PERENNIAL')
+                    ? 'PERENNIAL'
+                    : my.farm!.waterSources.find((w) => w.availability === 'SEASONAL')
+                      ? 'SEASONAL'
+                      : a.availability) as Answers['availability'],
+                  village: a.village || my.farm!.village || '',
+                  district: a.district || my.farm!.district || '',
+                  areaAcres: plot && plot.areaUnit === 'ACRE' ? String(plot.area) : a.areaAcres,
+                }));
+              }}
+            />
+          )}
           <Field value={answers.village} onChange={(v) => set('village', v)} placeholder={t('villagePlaceholder')} />
           <Field value={answers.district} onChange={(v) => set('district', v)} placeholder={t('districtPlaceholder')} />
           <Body muted>{t('stateKarnataka')}</Body>
-          <Body muted>🛰️ {t('gpsSoon')}</Body>
         </>
       )}
 
@@ -102,6 +135,20 @@ export default function SuggestScreen() {
               set('water', answers.water.includes(id) ? answers.water.filter((w) => w !== id) : [...answers.water, id])
             }
           />
+          {answers.water.length > 0 && (
+            <>
+              <Text style={styles.subq}>{t('waterAllYear')}</Text>
+              <ChoiceRow
+                options={[
+                  { id: 'PERENNIAL' as const, label: t('yesAllYear') },
+                  { id: 'SEASONAL' as const, label: t('someMonths') },
+                  { id: 'UNKNOWN' as const, label: t('notSure') },
+                ]}
+                value={answers.availability}
+                onChange={(v) => set('availability', v)}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -148,190 +195,163 @@ export default function SuggestScreen() {
             placeholder={t('budgetPlaceholder')}
             numeric
           />
+          <Field
+            label={t('areaAcres')}
+            value={answers.areaAcres}
+            onChange={(v) => set('areaAcres', v.replace(/[^0-9.]/g, ''))}
+            placeholder="2"
+            numeric
+          />
         </>
       )}
     </Screen>
   );
 }
 
-function Results({ answers, onRestart }: { answers: Answers; onRestart: () => void }) {
-  const { t, l } = useLanguage();
+function buildRequest(a: Answers) {
+  const soilTest = SOIL_TEST_FIELDS.flatMap((f) => {
+    const raw = a.soilTest[f.id]?.trim();
+    const value = raw ? Number(raw) : NaN;
+    return Number.isFinite(value) ? [{ parameter: f.parameter, value, unit: f.unitCode }] : [];
+  });
+  const budget = a.budget.trim() ? Number(a.budget) : NaN;
+  const area = a.areaAcres.trim() ? Number(a.areaAcres) : NaN;
+  return {
+    ...(a.plotId ? { plotId: a.plotId } : {}),
+    ...(a.district.trim() ? { district: a.district.trim() } : {}),
+    state: 'Karnataka',
+    ...(a.soil && a.soil !== 'UNKNOWN' ? { soilType: a.soil } : {}),
+    ...(a.water.length ? { waterSources: a.water.map((type) => ({ type, availability: a.availability })) } : {}),
+    ...(soilTest.length ? { soilTest } : {}),
+    ...(a.season ? { season: a.season } : {}),
+    ...(Number.isFinite(budget) ? { budget } : {}),
+    ...(Number.isFinite(area) && area > 0 ? { area, areaUnit: 'ACRE' } : {}),
+  };
+}
 
-  const checks: [StringKey, boolean][] = [
-    ['location', Boolean(answers.village.trim() || answers.district.trim())],
-    ['soilType', Boolean(answers.soil && answers.soil !== 'unknown')],
-    ['waterSource', answers.water.length > 0],
-    ['soilTest', Object.values(answers.soilTest).some((v) => v.trim() !== '')],
-    ['season', Boolean(answers.season)],
-    ['budget', answers.budget.trim() !== ''],
-  ];
-  const given = checks.filter(([, ok]) => ok).length;
-  const missing = checks.filter(([, ok]) => !ok).map(([key]) => key);
+const MISSING_LABEL: Record<string, StringKey> = {
+  LOCATION: 'location', SOIL_TYPE: 'soilType', WATER_SOURCE: 'waterSource', SOIL_TEST: 'soilTest', SEASON: 'season', BUDGET: 'budget',
+};
+const CRITERION_LABEL: Record<string, StringKey> = {
+  SEASON: 'season', SOIL_TYPE: 'soilType', SOIL_TEST: 'soilTest', SOIL_PH: 'soilPh', WATER_NEED: 'waterNeeds', REGION: 'region', BUDGET: 'budget',
+};
+const RESULT_ICON = { SUITABLE: '✅', CAUTION: '⚠️', UNSUITABLE: '❌', UNKNOWN: '❔' } as const;
+const LEVEL_COLOR: Record<string, string> = {
+  HIGHLY_SUITABLE: colors.primary, SUITABLE: colors.primary, MODERATELY_SUITABLE: colors.estimate, NOT_SUITABLE: colors.danger, UNKNOWN: colors.pendingText,
+};
+
+function Results({ answers, onRestart }: { answers: Answers; onRestart: () => void }) {
+  const { t, lang } = useLanguage();
+  const [result, setResult] = useState<Recommendation | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setFailed(false);
+    recommendations
+      .create(buildRequest(answers))
+      .then((r) => alive && setResult(r))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [answers, attempt]);
 
   return (
     <Screen footer={<Button label={`🔄 ${t('startOver')}`} variant="secondary" onPress={onRestart} />}>
       <Text style={styles.question}>{t('resultsTitle')}</Text>
-      <PrototypeBanner />
 
-      <Card>
-        <Text style={styles.metricLabel}>{t('dataCompleteness')}</Text>
-        <Text style={styles.metricValue}>
-          {given} / {checks.length}
-        </Text>
-        <ProgressBar value={given / checks.length} />
-        {missing.length ? (
-          <>
-            <Text style={[styles.metricLabel, { marginTop: spacing.sm }]}>⚠️ {t('missingInfo')}</Text>
-            {missing.map((key) => (
-              <Text key={key} style={styles.missingItem}>
-                • {t(key)}
-              </Text>
-            ))}
-            <Body muted>{t('missingInfoHelp')}</Body>
-            {missing.includes('soilTest') && <Body muted>🧪 {t('soilTestTip')}</Body>}
-          </>
-        ) : (
-          <Body>✅ {t('allInfoGiven')}</Body>
-        )}
-      </Card>
-
-      <Card style={{ backgroundColor: colors.primaryLight, borderColor: colors.primaryLight }}>
-        <Body>{t('resultsPrototypeNote')}</Body>
-      </Card>
-
-      <Heading>{t('supportedCropsNote')}</Heading>
-      {CROPS.map((crop) => (
-        <Card key={crop.id}>
-          <View style={styles.resultHead}>
-            <View style={[styles.resultIcon, { backgroundColor: crop.color }]}>
-              <Text style={{ fontSize: 34 }}>{crop.icon}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.resultName}>{l(crop.name)}</Text>
-              <Text style={styles.resultCats}>
-                {crop.categoryIds.map((id) => l(getCategory(id)?.name ?? { en: id, kn: id, hi: id })).join(' · ')}
-              </Text>
-            </View>
-          </View>
-          <ResultRow label={t('suitability')} value={t('notCalculated')} />
-          <ResultRow label={t('whyRecommended')} value={t('pendingVerified')} />
-          <ResultRow label={t('duration')} value={t('pendingVerified')} />
-          <ResultRow label={t('costOfCultivation')} value={t('notAvailable')} />
-          <ResultRow label={t('expectedYield')} value={t('notAvailable')} />
-          <ResultRow label={t('risks')} value={t('pendingVerified')} />
-          <Button label={`${t('viewGuide')} →`} variant="secondary" onPress={() => router.push(`/crop/${crop.id}`)} />
+      {!result && !failed && (
+        <Card style={{ alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Body muted>{t('checking')}</Body>
+          <Body muted>{t('serverWaking')}</Body>
         </Card>
-      ))}
-    </Screen>
-  );
-}
+      )}
+      {failed && (
+        <Card style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 40 }}>📶</Text>
+          <Body>{t('loadError')}</Body>
+          <View style={{ flexDirection: 'row', alignSelf: 'stretch' }}>
+            <Button label={`↻ ${t('retry')}`} onPress={() => setAttempt((n) => n + 1)} />
+          </View>
+        </Card>
+      )}
 
-function ResultRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.resultRow}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.resultLabel}>{label}</Text>
-        <Text style={styles.resultValue}>{value}</Text>
-      </View>
-      <Badge kind="pending" />
-    </View>
-  );
-}
-
-function Field({
-  value,
-  onChange,
-  placeholder,
-  numeric,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  numeric?: boolean;
-}) {
-  return (
-    <TextInput
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      keyboardType={numeric ? 'decimal-pad' : 'default'}
-      accessibilityLabel={placeholder}
-      style={styles.input}
-    />
-  );
-}
-
-function OptionGrid({
-  options,
-  selected,
-  onToggle,
-  swatch,
-}: {
-  options: Option[];
-  selected: string[];
-  onToggle: (id: string) => void;
-  swatch?: boolean;
-}) {
-  const { l } = useLanguage();
-  return (
-    <View style={styles.optionGrid}>
-      {options.map((o) => {
-        const active = selected.includes(o.id);
-        return (
-          <Pressable
-            key={o.id}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => onToggle(o.id)}
-            style={[styles.option, active && styles.optionActive]}
-          >
-            {swatch ? (
-              <View style={[styles.swatch, { backgroundColor: o.color }]} />
+      {result && (
+        <>
+          <Card>
+            <Text style={styles.metricLabel}>{t('dataCompleteness')}</Text>
+            <Text style={styles.metricValue}>{Math.round(result.dataCompletenessPct ?? 0)}%</Text>
+            <ProgressBar value={(result.dataCompletenessPct ?? 0) / 100} />
+            {result.missingInputs.length ? (
+              <>
+                <Text style={[styles.metricLabel, { marginTop: spacing.sm }]}>⚠️ {t('missingInfo')}</Text>
+                {result.missingInputs.map((key) => (
+                  <Text key={key} style={styles.missingItem}>
+                    • {MISSING_LABEL[key] ? t(MISSING_LABEL[key]!) : key}
+                  </Text>
+                ))}
+                <Body muted>{t('missingInfoHelp')}</Body>
+                {result.missingInputs.includes('SOIL_TEST') && <Body muted>🧪 {t('soilTestTip')}</Body>}
+              </>
             ) : (
-              <Text style={styles.optionIcon}>{o.icon}</Text>
+              <Body>✅ {t('allInfoGiven')}</Body>
             )}
-            <Text style={[styles.optionText, active && { color: '#fff' }]}>{l(o.name)}</Text>
-            {active && <Text style={styles.optionCheck}>✔</Text>}
-          </Pressable>
-        );
-      })}
-    </View>
+          </Card>
+
+          <Card style={{ backgroundColor: colors.primaryLight, borderColor: colors.primaryLight }}>
+            <Body>{t('ruleNote')}</Body>
+          </Card>
+
+          {result.items.map((item) => {
+            const look = cropLook(item.crop.slug);
+            const levelKey = `suit${item.suitability}` as StringKey;
+            return (
+              <Card key={item.id}>
+                <View style={styles.resultHead}>
+                  <View style={[styles.resultIcon, { backgroundColor: look.color }]}>
+                    <Text style={{ fontSize: 34 }}>{look.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.resultName}>
+                      {item.rank}. {item.crop.name}
+                    </Text>
+                    <Text style={[styles.level, { color: LEVEL_COLOR[item.suitability] ?? colors.text }]}>{t(levelKey)}</Text>
+                  </View>
+                </View>
+                {item.reasons.map((r, i) => (
+                  <View key={i} style={styles.reason}>
+                    <Text style={styles.reasonIcon}>{RESULT_ICON[r.result]}</Text>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.reasonTitle}>
+                        {CRITERION_LABEL[r.criterion] ? t(CRITERION_LABEL[r.criterion]!) : r.criterion} — {t(`res${r.result}` as StringKey)}
+                      </Text>
+                      {lang === 'en' || r.observed || r.required ? (
+                        <Text style={styles.reasonText}>
+                          {lang === 'en' ? r.message : [r.observed, r.required].filter(Boolean).join(' → ')}
+                        </Text>
+                      ) : null}
+                      <SourceLine source={r.source} />
+                    </View>
+                  </View>
+                ))}
+                <Button label={`${t('viewGuide')} →`} variant="secondary" onPress={() => router.push(`/crop/${item.crop.slug}`)} />
+              </Card>
+            );
+          })}
+          <PrototypeBanner />
+        </>
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   stepLabel: { fontSize: font.small, color: colors.textMuted, fontWeight: '600' },
   question: { fontSize: 24, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
-  input: {
-    minHeight: TOUCH,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    fontSize: font.body,
-    color: colors.text,
-  },
-  optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  option: {
-    width: '48%',
-    flexGrow: 1,
-    minHeight: 104,
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.sm,
-    gap: spacing.xs,
-  },
-  optionActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  optionIcon: { fontSize: 34 },
-  swatch: { width: 52, height: 40, borderRadius: radius.sm, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' },
-  optionText: { fontSize: font.body, fontWeight: '700', color: colors.text, textAlign: 'center' },
-  optionCheck: { position: 'absolute', top: 8, right: 10, color: '#fff', fontSize: 18, fontWeight: '800' },
+  subq: { fontSize: font.heading, fontWeight: '800', color: colors.text, marginTop: spacing.sm },
   soilGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   soilField: { width: '47%', flexGrow: 1, gap: 4 },
   soilLabel: { fontSize: font.small, fontWeight: '700', color: colors.text },
@@ -341,15 +361,9 @@ const styles = StyleSheet.create({
   resultHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   resultIcon: { width: 60, height: 60, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   resultName: { fontSize: font.heading, fontWeight: '800', color: colors.text },
-  resultCats: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  resultLabel: { fontSize: font.small, fontWeight: '700', color: colors.text },
-  resultValue: { fontSize: 13, color: colors.textMuted },
+  level: { fontSize: font.body, fontWeight: '800', marginTop: 2 },
+  reason: { flexDirection: 'row', gap: spacing.sm, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
+  reasonIcon: { fontSize: 18, marginTop: 1 },
+  reasonTitle: { fontSize: font.small, fontWeight: '700', color: colors.text },
+  reasonText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
 });

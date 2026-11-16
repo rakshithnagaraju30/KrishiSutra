@@ -8,14 +8,12 @@ import { Button } from '../components/ui';
 import { LanguageProvider, useLanguage } from '../i18n/LanguageContext';
 import { strings } from '../i18n/strings';
 import type { Lang } from '../i18n/types';
-import { PlansProvider } from '../state/PlansContext';
 import { colors, spacing } from '../theme/theme';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <LanguageProvider>
-        <PlansProvider>
           <StatusBar style="light" />
           <Stack
             screenOptions={{
@@ -28,7 +26,6 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           </Stack>
           <FirstLaunchLanguageGate />
-        </PlansProvider>
       </LanguageProvider>
     </SafeAreaProvider>
   );

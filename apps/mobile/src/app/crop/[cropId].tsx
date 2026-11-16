@@ -1,163 +1,125 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Badge, Body, Button, Card, Heading, PendingFact, PrototypeBanner, Screen, Segmented } from '../../components/ui';
-import { getCategory, getCrop, STAGES, type Crop } from '../../data/catalog';
+import { catalog } from '../../api/endpoints';
+import type { CropDetail, Procedure } from '../../api/types';
+import { useApi } from '../../api/useApi';
+import { Body, Button, Card, Heading, LoadState, PrototypeBanner, Screen, Segmented, SourceLine, TrustBadge } from '../../components/ui';
+import { categoryIcon, cropLook, stageIcon } from '../../data/look';
 import { useLanguage } from '../../i18n/LanguageContext';
-import { usePlans } from '../../state/PlansContext';
 import { colors, font, radius, spacing } from '../../theme/theme';
+import { stageTiming } from '../../utils/format';
 
-type Tab = 'overview' | 'steps' | 'calendar' | 'cost' | 'tips';
+type Tab = 'steps' | 'overview' | 'sources';
 
+/** Route param is the crop slug from the API (e.g. "rice"). */
 export default function CropScreen() {
-  const { cropId } = useLocalSearchParams<{ cropId: string }>();
-  const crop = getCrop(cropId);
-  const { t, l } = useLanguage();
-  const { plans, addPlan } = usePlans();
+  const { cropId: slug } = useLocalSearchParams<{ cropId: string }>();
+  const { t, lang } = useLanguage();
   const [tab, setTab] = useState<Tab>('steps');
+  const [guideIndex, setGuideIndex] = useState(0);
 
-  if (!crop) {
-    return (
-      <Screen>
-        <Body>{t('noResults')}</Body>
-      </Screen>
-    );
-  }
-
-  const existing = plans.find((p) => p.cropId === crop.id);
+  const crop = useApi(slug ? `crop:${lang}:${slug}` : null, () => catalog.crop(slug!));
+  const guideId = crop.data?.guides[guideIndex]?.id ?? null;
+  const guide = useApi(guideId ? `procedure:${lang}:${guideId}` : null, () => catalog.procedure(guideId!));
+  const look = cropLook(slug);
 
   return (
     <Screen
       footer={
-        existing ? (
-          <Button icon="📋" label={t('alreadyTracking')} variant="secondary" onPress={() => router.push(`/plan/${existing.id}`)} />
-        ) : (
+        crop.data ? (
           <Button
             icon="🌱"
             label={t('startTracking')}
-            onPress={() => {
-              const plan = addPlan(crop.id);
-              router.push(`/plan/${plan.id}`);
-            }}
+            onPress={() => router.push({ pathname: '/start/[slug]', params: { slug: crop.data!.slug, ...(guideId ? { procedureId: guideId } : {}) } })}
           />
-        )
+        ) : undefined
       }
     >
-      <Stack.Screen options={{ title: l(crop.name) }} />
+      <Stack.Screen options={{ title: crop.data?.name ?? '' }} />
+      <LoadState loading={crop.loading} error={crop.error} offline={crop.offline} hasData={Boolean(crop.data)} onRetry={crop.reload} />
 
-      <View style={[styles.hero, { backgroundColor: crop.color }]}>
-        <Text style={styles.heroEmoji}>{crop.icon}</Text>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.heroTitle}>{l(crop.name)}</Text>
-          <Text style={styles.heroSub}>
-            {t('method')}: {l(crop.method)}
-          </Text>
-          <View style={styles.catRow}>
-            {crop.categoryIds.map((id) => {
-              const c = getCategory(id);
-              return c ? (
-                <Text key={id} style={styles.catPill}>
-                  {c.icon} {l(c.name)}
-                </Text>
-              ) : null;
-            })}
+      {crop.data && (
+        <>
+          <View style={[styles.hero, { backgroundColor: look.color }]}>
+            <Text style={styles.heroEmoji}>{look.icon}</Text>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.heroTitle}>{crop.data.name}</Text>
+              {crop.data.scientificName ? <Text style={styles.heroSub}>{crop.data.scientificName}</Text> : null}
+              <View style={styles.catRow}>
+                {crop.data.categories.map((c) => (
+                  <Text key={c.slug} style={styles.catPill}>
+                    {categoryIcon(c.slug)} {c.name}
+                  </Text>
+                ))}
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
 
-      <Segmented<Tab>
-        value={tab}
-        onChange={setTab}
-        options={[
-          { id: 'overview', icon: '📄', label: t('tabOverview') },
-          { id: 'steps', icon: '🪜', label: t('tabSteps') },
-          { id: 'calendar', icon: '📅', label: t('tabCalendar') },
-          { id: 'cost', icon: '₹', label: t('tabCost') },
-          { id: 'tips', icon: '💡', label: t('tabTips') },
-        ]}
-      />
+          <Segmented<Tab>
+            value={tab}
+            onChange={setTab}
+            options={[
+              { id: 'steps', icon: '🪜', label: t('tabSteps') },
+              { id: 'overview', icon: '📄', label: t('tabOverview') },
+              { id: 'sources', icon: '📚', label: t('sources') },
+            ]}
+          />
 
-      {tab === 'overview' && <Overview crop={crop} />}
-      {tab === 'steps' && <Steps crop={crop} />}
-      {tab === 'calendar' && <Calendar crop={crop} />}
-      {tab === 'cost' && (
-        <Card>
-          <PendingFact label={t('costOfCultivation')} />
-          <PendingFact label={t('expectedYield')} />
-        </Card>
+          {tab === 'steps' && (
+            <>
+              {crop.data.guides.length > 1 && (
+                <Segmented<string>
+                  value={String(guideIndex)}
+                  onChange={(v) => setGuideIndex(Number(v))}
+                  options={crop.data.guides.map((g, i) => ({ id: String(i), label: g.name }))}
+                />
+              )}
+              {crop.data.guides.length === 0 && (
+                <Card>
+                  <Body muted>{t('noGuide')}</Body>
+                </Card>
+              )}
+              {guideId && <LoadState loading={guide.loading} error={guide.error} offline={guide.offline} hasData={Boolean(guide.data)} onRetry={guide.reload} />}
+              {guide.data && <Steps guide={guide.data} />}
+            </>
+          )}
+          {tab === 'overview' && <Overview crop={crop.data} />}
+          {tab === 'sources' && <Sources crop={crop.data} guide={guide.data} />}
+          <PrototypeBanner />
+        </>
       )}
-      {tab === 'tips' && (
-        <Card>
-          <Heading>💡 {t('tip')}</Heading>
-          <Body muted>{t('samplePlaceholder')}</Body>
-        </Card>
-      )}
-      <PrototypeBanner />
     </Screen>
   );
 }
 
-function Overview({ crop }: { crop: Crop }) {
+function Steps({ guide }: { guide: Procedure }) {
   const { t } = useLanguage();
-  const [variety, setVariety] = useState(0);
-  return (
-    <>
-      <Card>
-        <Body muted>{t('samplePlaceholder')}</Body>
-        <PendingFact label={t('duration')} />
-        <PendingFact label={t('seasons')} />
-        <PendingFact label={t('soilNeeds')} />
-        <PendingFact label={t('waterNeeds')} />
-      </Card>
-      <Heading>{t('chooseVariety')}</Heading>
-      <View style={{ gap: spacing.sm }}>
-        {[1, 2].map((n, i) => (
-          <Pressable
-            key={n}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: variety === i }}
-            onPress={() => setVariety(i)}
-            style={[styles.variety, variety === i && styles.varietyActive]}
-          >
-            <Text style={[styles.varietyText, variety === i && { color: '#fff' }]}>
-              {crop.icon} {t('sampleVariety')} {n}
-            </Text>
-            <Badge kind="pending" />
-          </Pressable>
-        ))}
-      </View>
-      <Body muted>{t('varietiesPending')}</Body>
-    </>
-  );
-}
-
-function Steps({ crop }: { crop: Crop }) {
-  const { t, l } = useLanguage();
   return (
     <View style={{ gap: spacing.sm }}>
-      <Heading>{t('growingProcedure')}</Heading>
-      {crop.stages.map((stageId, index) => {
-        const stage = STAGES[stageId];
-        const last = index === crop.stages.length - 1;
+      <View style={styles.headRow}>
+        <Heading>{guide.name}</Heading>
+      </View>
+      <TrustBadge trust={guide.trust} />
+      {guide.description ? <Body muted>{guide.description}</Body> : null}
+      {guide.stages.map((stage, index) => {
+        const timing = stageTiming(stage, t);
         return (
           <Pressable
-            key={stageId}
+            key={stage.id}
             accessibilityRole="button"
-            onPress={() => router.push(`/stage/${crop.id}/${index}`)}
+            onPress={() => router.push(`/stage/${guide.id}/${index}`)}
             style={({ pressed }) => [styles.stepRow, pressed && { opacity: 0.85 }]}
           >
-            <View style={styles.timeline}>
-              <View style={styles.stepNumber}>
-                <Text style={styles.stepNumberText}>{index + 1}</Text>
-              </View>
-              {!last && <View style={styles.timelineLine} />}
+            <View style={styles.stepNumber}>
+              <Text style={styles.stepNumberText}>{index + 1}</Text>
             </View>
             <View style={styles.stepBody}>
-              <Text style={styles.stepTitle}>{l(stage.title)}</Text>
-              <Text style={styles.stepDays}>{t('daysPending')}</Text>
+              <Text style={styles.stepTitle}>{stage.title}</Text>
+              {timing ? <Text style={styles.stepDays}>📅 {timing}</Text> : null}
             </View>
             <View style={styles.stepThumb}>
-              <Text style={{ fontSize: 28 }}>{stage.icon}</Text>
+              <Text style={{ fontSize: 28 }}>{stageIcon(stage.type)}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
@@ -167,18 +129,88 @@ function Steps({ crop }: { crop: Crop }) {
   );
 }
 
-function Calendar({ crop }: { crop: Crop }) {
-  const { t, l } = useLanguage();
+const MONTHS: Record<string, string[]> = {
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
+const monthName = (m: number) => MONTHS.en![m - 1] ?? String(m);
+
+function Overview({ crop }: { crop: CropDetail }) {
+  const { t } = useLanguage();
+  const fmtReq = (r: CropDetail['requirements'][number]) =>
+    r.min !== null || r.max !== null
+      ? `${r.min ?? '…'}${r.max !== null && r.max !== r.min ? `–${r.max}` : ''} ${r.unit ?? ''}`.trim()
+      : r.level ?? '';
+  return (
+    <>
+      {crop.description ? (
+        <Card>
+          <Heading>{t('aboutCrop')}</Heading>
+          <Body>{crop.description}</Body>
+        </Card>
+      ) : null}
+
+      <Card>
+        <Heading>🗓️ {t('seasons')}</Heading>
+        {crop.seasons.length === 0 && <Body muted>{t('notInGuideYet')}</Body>}
+        {crop.seasons.map((s, i) => (
+          <View key={`${s.code}-${i}`} style={styles.fact}>
+            <Text style={styles.factLabel}>
+              {s.name}
+              {s.sowingStartMonth ? ` · ${monthName(s.sowingStartMonth)}–${monthName(s.sowingEndMonth ?? s.sowingStartMonth)}` : ''}
+              {s.region ? ` · ${s.region}` : ''}
+            </Text>
+            {s.notes ? <Text style={styles.factNote}>{s.notes}</Text> : null}
+            <TrustBadge trust={s.trust} />
+          </View>
+        ))}
+      </Card>
+
+      <Card>
+        <Heading>🟤 {t('suitableSoils')}</Heading>
+        {crop.soils.length === 0 && <Body muted>{t('notInGuideYet')}</Body>}
+        {crop.soils.map((s) => (
+          <View key={s.code} style={styles.fact}>
+            <Text style={styles.factLabel}>{s.name}</Text>
+            {s.notes ? <Text style={styles.factNote}>{s.notes}</Text> : null}
+            <TrustBadge trust={s.trust} />
+          </View>
+        ))}
+      </Card>
+
+      <Card>
+        <Heading>💧 {t('needs')}</Heading>
+        {crop.requirements.length === 0 && <Body muted>{t('notInGuideYet')}</Body>}
+        {crop.requirements.map((r, i) => (
+          <View key={`${r.parameter}-${i}`} style={styles.fact}>
+            <Text style={styles.factLabel}>
+              {r.name}: {fmtReq(r)}
+            </Text>
+            {r.notes ? <Text style={styles.factNote}>{r.notes}</Text> : null}
+            <TrustBadge trust={r.trust} />
+          </View>
+        ))}
+      </Card>
+    </>
+  );
+}
+
+function Sources({ crop, guide }: { crop: CropDetail; guide: Procedure | null }) {
+  const { t } = useLanguage();
+  const seen = new Map<string, NonNullable<CropDetail['soils'][number]['source']>>();
+  const add = (s: CropDetail['soils'][number]['source']) => {
+    if (s && !seen.has(s.id)) seen.set(s.id, s);
+  };
+  crop.seasons.forEach((s) => add(s.source));
+  crop.soils.forEach((s) => add(s.source));
+  crop.requirements.forEach((r) => add(r.source));
+  guide?.stages.forEach((st) => st.instructions.forEach((i) => add(i.source)));
   return (
     <Card>
-      <Body muted>📅 {t('calendarNote')}</Body>
-      {crop.stages.map((stageId, index) => (
-        <View key={stageId} style={styles.calRow}>
-          <Text style={styles.calIndex}>{index + 1}</Text>
-          <Text style={styles.calTitle}>{l(STAGES[stageId].title)}</Text>
-          <Text style={styles.calDays}>{t('daysPending')}</Text>
-        </View>
+      <Heading>📚 {t('sources')}</Heading>
+      {[...seen.values()].map((s) => (
+        <SourceLine key={s.id} source={s} />
       ))}
+      {seen.size === 0 && <Body muted>{t('notInGuideYet')}</Body>}
     </Card>
   );
 }
@@ -187,7 +219,7 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, borderRadius: radius.lg, padding: spacing.lg },
   heroEmoji: { fontSize: 64 },
   heroTitle: { fontSize: font.title, fontWeight: '800', color: colors.text },
-  heroSub: { fontSize: font.small, color: colors.textMuted, fontWeight: '600' },
+  heroSub: { fontSize: font.small, color: colors.textMuted, fontStyle: 'italic' },
   catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   catPill: {
     fontSize: 13,
@@ -198,19 +230,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     overflow: 'hidden',
   },
-  variety: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  varietyActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  varietyText: { fontSize: font.body, fontWeight: '700', color: colors.text },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stepRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,38 +242,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     minHeight: 76,
   },
-  timeline: { alignItems: 'center', alignSelf: 'stretch', justifyContent: 'center' },
-  stepNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  stepNumber: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   stepNumberText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  timelineLine: { position: 'absolute', top: '75%', width: 2, height: 30, backgroundColor: colors.primaryLight },
   stepBody: { flex: 1 },
   stepTitle: { fontSize: font.body, fontWeight: '700', color: colors.text },
   stepDays: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
-  stepThumb: {
-    width: 56,
-    height: 48,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  stepThumb: { width: 56, height: 48, borderRadius: radius.sm, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   chevron: { fontSize: 26, color: colors.textMuted },
-  calRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  calIndex: { width: 24, fontWeight: '800', color: colors.primary, fontSize: font.body },
-  calTitle: { flex: 1, fontSize: font.small, color: colors.text, fontWeight: '600' },
-  calDays: { fontSize: 13, color: colors.textMuted },
+  fact: { gap: 4, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+  factLabel: { fontSize: font.body, fontWeight: '700', color: colors.text },
+  factNote: { fontSize: font.small, color: colors.textMuted, lineHeight: 21 },
 });

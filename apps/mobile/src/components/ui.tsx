@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { useLanguage } from '../i18n/LanguageContext';
 import { colors, font, radius, spacing, TOUCH } from '../theme/theme';
@@ -233,4 +233,176 @@ export const styles = StyleSheet.create({
   segmentTextActive: { color: '#fff' },
   progressTrack: { height: 10, borderRadius: 5, backgroundColor: colors.primaryLight, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.primary },
+});
+
+// ------------------------------------------------------------------ live-data helpers
+
+/** Trust label for API content (VERIFIED / SOURCE_CITED / UNVERIFIED). */
+export function TrustBadge({ trust }: { trust: 'VERIFIED' | 'SOURCE_CITED' | 'UNVERIFIED' }) {
+  const { t } = useLanguage();
+  const map = {
+    VERIFIED: { bg: colors.primaryLight, fg: colors.verified, label: t('labelVerified'), icon: '✔' },
+    SOURCE_CITED: { bg: '#E6EEF8', fg: '#2B5C8A', label: t('labelSourceCited'), icon: '📚' },
+    UNVERIFIED: { bg: colors.pendingBg, fg: colors.pendingText, label: t('labelUnverified'), icon: '⏳' },
+  }[trust];
+  return (
+    <View style={[styles.badge, { backgroundColor: map.bg }]}>
+      <Text style={[styles.badgeText, { color: map.fg }]}>
+        {map.icon} {map.label}
+      </Text>
+    </View>
+  );
+}
+
+/** Loading, error and offline notices for a useApi() state. Renders nothing once data is shown online. */
+export function LoadState({
+  loading,
+  error,
+  offline,
+  hasData,
+  onRetry,
+}: {
+  loading: boolean;
+  error: { isNetwork: boolean; message: string } | null;
+  offline: boolean;
+  hasData: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useLanguage();
+  if (offline) {
+    return (
+      <Pressable accessibilityRole="button" onPress={onRetry} style={[styles.banner, { backgroundColor: colors.pendingBg }]}>
+        <Text style={styles.bannerIcon}>📴</Text>
+        <Text style={[styles.bannerText, { color: colors.pendingText }]}>
+          {t('offlineCopy')} {t('retry')} ↻
+        </Text>
+      </Pressable>
+    );
+  }
+  if (loading && !hasData) {
+    return (
+      <Card style={{ alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Body muted>{t('loading')}</Body>
+        <Body muted>{t('serverWaking')}</Body>
+      </Card>
+    );
+  }
+  if (error && !hasData) {
+    return (
+      <Card style={{ alignItems: 'center' }}>
+        <Text style={{ fontSize: 40 }}>📶</Text>
+        <Body>{error.isNetwork ? t('loadError') : error.message}</Body>
+        <View style={{ flexDirection: 'row', alignSelf: 'stretch' }}>
+          <Button label={`↻ ${t('retry')}`} onPress={onRetry} />
+        </View>
+      </Card>
+    );
+  }
+  return null;
+}
+
+/** Source line with a link to the cited page. */
+export function SourceLine({ source }: { source: { title: string; organization: string | null; url: string | null } | null }) {
+  const { t } = useLanguage();
+  if (!source) return null;
+  return (
+    <Pressable
+      accessibilityRole="link"
+      disabled={!source.url}
+      onPress={() => source.url && Linking.openURL(source.url).catch(() => undefined)}
+    >
+      <Text style={liveStyles.source}>
+        📚 {source.organization ? `${source.organization} — ` : ''}
+        {source.title}
+        {source.url ? `  ↗ ${t('openSource')}` : ''}
+      </Text>
+    </Pressable>
+  );
+}
+
+export function Field({
+  value,
+  onChange,
+  placeholder,
+  numeric,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  numeric?: boolean;
+  label?: string;
+}) {
+  return (
+    <View style={{ gap: 4 }}>
+      {label ? <Text style={liveStyles.fieldLabel}>{label}</Text> : null}
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        keyboardType={numeric ? 'decimal-pad' : 'default'}
+        accessibilityLabel={label ?? placeholder}
+        style={liveStyles.input}
+      />
+    </View>
+  );
+}
+
+/** Row of large selectable chips (single choice). */
+export function ChoiceRow<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string }[];
+  value: T | null;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <View style={liveStyles.choiceRow}>
+      {options.map((o) => {
+        const active = o.id === value;
+        return (
+          <Pressable
+            key={o.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(o.id)}
+            style={[liveStyles.choice, active && styles.segmentActive]}
+          >
+            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const liveStyles = StyleSheet.create({
+  source: { fontSize: 13, color: '#2B5C8A', lineHeight: 19 },
+  fieldLabel: { fontSize: font.small, fontWeight: '700', color: colors.text },
+  input: {
+    minHeight: TOUCH,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    fontSize: font.body,
+    color: colors.text,
+  },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  choice: {
+    minHeight: TOUCH,
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
