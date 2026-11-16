@@ -13,7 +13,7 @@ services:
     buildCommand: npm ci --include=dev && npm run build
     # Apply migrations, load reference + published content (idempotent), then replace the shell with
     # node so it receives SIGTERM directly (graceful shutdown).
-    startCommand: npx prisma migrate deploy && npx prisma db seed && exec node dist/src/server.js
+    startCommand: sh scripts/start.sh
     healthCheckPath: /api/v1/health
     autoDeploy: true
     envVars:

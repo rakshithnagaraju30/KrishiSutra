@@ -119,7 +119,7 @@ export async function loadCropContent(prisma: PrismaClient, content: CropContent
         });
       }
       return version.id;
-    }, { timeout: 60_000 });
+    }, { timeout: 120_000, maxWait: 30_000 });
   }
 
   // ---- draft translations of guide and stage titles (DRAFT, pending review)

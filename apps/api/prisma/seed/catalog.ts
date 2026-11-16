@@ -224,5 +224,5 @@ export async function seedCatalog(prisma: PrismaClient) {
         },
       });
     }
-  });
+  }, { timeout: 120_000, maxWait: 30_000 }); // generous: a remote database (e.g. Neon) adds latency per query
 }

@@ -36,8 +36,9 @@ Everything can be done **from a phone browser**. Total time: about 15 minutes. B
 5. Tap **Apply** (or *Deploy Blueprint*). The first build takes 3–6 minutes. Render then:
    - installs and compiles the API,
    - creates all database tables (`prisma migrate deploy`),
-   - loads reference data and the published crop guides (`prisma db seed`),
-   - starts the server.
+   - starts the server (`apps/api/scripts/start.sh`),
+   - loads reference data and the published crop guides in the background (`prisma db seed`;
+     the logs show `Seed finished.` — until then some crops may be missing).
 
 ## Step 3 — Check it works
 
