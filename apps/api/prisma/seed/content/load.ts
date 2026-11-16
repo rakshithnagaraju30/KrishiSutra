@@ -9,7 +9,7 @@
  *   (farmers already following the old version keep it).
  */
 import type { PrismaClient } from '../../../generated/prisma/client.ts';
-import type { CropContent } from './types.ts';
+import { STAGE_TITLE_TRANSLATIONS, type CropContent } from './types.ts';
 
 export async function loadCropContent(prisma: PrismaClient, content: CropContent) {
   const crop = await prisma.crop.findUniqueOrThrow({ where: { slug: content.cropSlug }, select: { id: true } });
@@ -59,6 +59,19 @@ export async function loadCropContent(prisma: PrismaClient, content: CropContent
     const existing = await prisma.cropSoilSuitability.findFirst({ where: { cropId: crop.id, soilTypeId: soil.id, sourceId: src(s.source), cropVarietyId: null }, select: { id: true } });
     if (existing) await prisma.cropSoilSuitability.update({ where: { id: existing.id }, data });
     else await prisma.cropSoilSuitability.create({ data: { cropId: crop.id, soilTypeId: soil.id, sourceId: src(s.source), ...data } });
+  }
+
+  // ---- seasons
+  if (content.seasons?.length) {
+    const karnataka = await prisma.region.findFirst({ where: { type: 'STATE', name: 'Karnataka' }, select: { id: true } });
+    for (const s of content.seasons) {
+      const season = await prisma.season.findUniqueOrThrow({ where: { code: s.season }, select: { id: true } });
+      const regionId = s.region === 'Karnataka' ? (karnataka?.id ?? null) : null;
+      const data = { regionId, sowingStartMonth: s.startMonth ?? null, sowingEndMonth: s.endMonth ?? null, notes: s.notes, verificationStatus: 'SOURCE_CITED' as const };
+      const existing = await prisma.cropSeasonMapping.findFirst({ where: { cropId: crop.id, seasonId: season.id, sourceId: src(s.source), cropVarietyId: null }, select: { id: true } });
+      if (existing) await prisma.cropSeasonMapping.update({ where: { id: existing.id }, data });
+      else await prisma.cropSeasonMapping.create({ data: { cropId: crop.id, seasonId: season.id, sourceId: src(s.source), ...data } });
+    }
   }
 
   // ---- guide (versioned)
@@ -124,6 +137,19 @@ export async function loadCropContent(prisma: PrismaClient, content: CropContent
     for (const [i, title] of (t.stages ?? []).entries()) {
       const stage = stages[i];
       if (stage && title) await put({ growingStageId: stage.id }, 'TITLE', title);
+    }
+  }
+  // Stage titles with a shared draft translation.
+  for (const [i, stage] of g.stages.entries()) {
+    const dict = STAGE_TITLE_TRANSLATIONS[stage.title];
+    const row = stages[i];
+    if (!dict || !row) continue;
+    for (const code of ['kn', 'hi'] as const) {
+      const languageId = lang[code];
+      if (!languageId || content.translations?.[code]?.stages?.[i]) continue;
+      const existing = await prisma.translation.findFirst({ where: { growingStageId: row.id, field: 'TITLE', languageId }, select: { id: true } });
+      if (existing) await prisma.translation.update({ where: { id: existing.id }, data: { value: dict[code] } });
+      else await prisma.translation.create({ data: { growingStageId: row.id, field: 'TITLE', languageId, value: dict[code], status: 'DRAFT' } });
     }
   }
   return { cropSlug: content.cropSlug, procedureId: procedure.id, stages: stages.length };
